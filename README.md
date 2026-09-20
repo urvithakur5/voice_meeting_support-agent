@@ -19,7 +19,7 @@ The system allows a user to describe a meeting problem using voice. The agent id
 ## Repository Structure
 
 ```text
-voice-meeting-support-agent/
+voice_meeting_support_agent/
 │
 ├── agent/
 ├── backend/
