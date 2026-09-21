@@ -10,11 +10,11 @@ The system allows a user to describe a meeting problem using voice. The agent id
 
 | Person | Responsibility |
 |---|---|
-| A | AI Agent / Reasoning |
-| B | Backend / Diagnostic Tools |
-| C | Voice Interface |
-| D | Frontend / UI |
-| E | Integration, Testing & QA |
+| Sachleen | AI Agent / Reasoning |
+| Gunika | Backend / Diagnostic Tools |
+| Kanishka | Voice Interface |
+| Pranav Sharma | Frontend / UI |
+| Urvi Thakur | Integration, Testing & QA |
 
 ## Repository Structure
 
