@@ -69,7 +69,19 @@ SCENARIOS = {
             "message": "Microphone is working correctly."
         }
     },
-
+        "MIC-005": {
+        "tool": "none",
+        "before": {
+            "status": "error",
+            "error_code": "clarification_needed",
+            "message": "Clarification is needed before running microphone diagnostics."
+        },
+        "after": {
+            "status": "error",
+            "error_code": "clarification_needed",
+            "message": "Clarification is needed before running microphone diagnostics."
+        }
+    },
     "CAM-001": {
         "tool": "camera",
         "before": {
