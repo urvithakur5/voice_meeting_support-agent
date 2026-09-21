@@ -1,0 +1,1091 @@
+<!-- HTML5 document -->
+<!doctype html>
+
+<html>
+
+<head>
+
+    <!-- Character encoding -->
+    <meta charset="utf-8">
+
+    <!-- Makes the website responsive on different screen sizes -->
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+
+    <!-- Browser tab title -->
+    <title>MeetAssist — Voice Meeting Support Agent</title>
+
+    <!-- Connect the external CSS file -->
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+<!-- Main application container -->
+<div class="app">
+
+
+    <!-- =========================
+         LEFT SIDEBAR
+         ========================= -->
+
+    <aside>
+
+        <!-- Application branding -->
+        <div class="brand">
+
+            <!-- Logo -->
+            <div class="logo">◉</div>
+
+            <!-- Application name -->
+            <div>
+                <b>MeetAssist</b>
+                <small>IT Helpdesk Agent</small>
+            </div>
+
+        </div>
+
+
+        <!-- Current session heading -->
+        <div class="side-label">
+            CURRENT SESSION
+        </div>
+
+
+        <!-- Current session information -->
+        <div class="session">
+
+            <!-- Green status dot -->
+            <i></i>
+
+            <div>
+                <b>Meeting Support</b>
+                <small>Session #MS-2048</small>
+            </div>
+
+        </div>
+
+
+        <!-- Issue selection heading -->
+        <div class="side-label">
+            ISSUE
+        </div>
+
+
+        <!--
+            Loop through all scenarios received
+            from the Flask backend.
+        -->
+        {% for key,item in scenarios.items() %}
+
+        <!-- Button for selecting an issue -->
+        <button
+            class="scenario {% if key=='microphone' %}active{% endif %}"
+            data-name="{{key}}"
+        >
+
+            <!-- Issue icon -->
+            <span>{{item[3]}}</span>
+
+            <!-- Issue name -->
+            <span>{{item[0]}}</span>
+
+        </button>
+
+        {% endfor %}
+
+
+        <!-- Bottom sidebar information -->
+        <div class="side-bottom">
+
+            ● Azure services connected
+
+            <br>
+
+            <small>
+                Text fallback available if voice fails.
+            </small>
+
+        </div>
+
+    </aside>
+
+
+
+    <!-- =========================
+         MAIN CONTENT
+         ========================= -->
+
+    <main>
+
+
+        <!-- Page header -->
+        <header>
+
+            <div>
+
+                <label>
+                    REAL-TIME VOICE SUPPORT
+                </label>
+
+                <h1>
+                    Voice Meeting Support Agent
+                </h1>
+
+            </div>
+
+
+            <!-- Connection status -->
+            <div class="connected">
+                ● Connected
+            </div>
+
+        </header>
+
+
+
+        <!-- Two-column dashboard -->
+        <div class="grid">
+
+
+            <!-- =========================
+                 LEFT COLUMN
+                 ========================= -->
+
+            <section>
+
+
+                <!-- Current issue card -->
+                <div class="card issue">
+
+                    <div>
+
+                        <label>
+                            CURRENT ISSUE
+                        </label>
+
+                        <!-- Issue title -->
+                        <h2 id="title">
+                            Microphone not working
+                        </h2>
+
+                        <!-- Issue description -->
+                        <p id="subtitle">
+                            The agent is diagnosing your
+                            Microsoft Teams meeting issue.
+                        </p>
+
+                    </div>
+
+
+                    <!-- Issue severity -->
+                    <strong id="severity">
+                        URGENT
+                    </strong>
+
+                </div>
+
+
+
+                <!-- =========================
+                     CONVERSATION CARD
+                     ========================= -->
+
+                <div class="card conversation">
+
+                    <div class="heading">
+
+                        <div>
+
+                            <label>
+                                CONVERSATION
+                            </label>
+
+                            <h3>
+                                Live transcript
+                            </h3>
+
+                        </div>
+
+                        <em>
+                            ● LIVE
+                        </em>
+
+                    </div>
+
+
+                    <!-- JavaScript inserts messages here -->
+                    <div id="transcript"></div>
+
+
+
+                    <!-- =========================
+                         MANUAL ISSUE INPUT
+                         ========================= -->
+
+                    <!-- Manual issue correction -->
+                    <div class="manual-input">
+
+                        <div class="manual-label">
+
+                            ✍️
+                            <span>
+                                Didn't hear that correctly?
+                            </span>
+
+                        </div>
+
+
+                        <!-- User can type the issue -->
+                        <textarea
+                            id="issueInput"
+                            placeholder="Type your issue here..."
+                            rows="3"
+                        ></textarea>
+
+
+                        <!-- Sends the corrected issue -->
+                        <button
+                            id="updateIssue"
+                            class="primary"
+                        >
+                            Update Issue
+                        </button>
+
+                    </div>
+
+
+
+                    <!-- =========================
+                         VOICE CONTROL
+                         ========================= -->
+
+                    <div class="voice">
+
+                        <!-- Voice status -->
+                        <p id="voiceStatus">
+                            Tap the microphone to speak
+                        </p>
+
+
+                        <!-- Microphone button -->
+                        <button id="mic">
+                            🎙
+                        </button>
+
+
+                        <small>
+                            Voice-first • Text fallback available
+                        </small>
+
+                    </div>
+
+                </div>
+
+
+
+                <!-- =========================
+                     TEXT FALLBACK
+                     ========================= -->
+
+                <div
+                    class="card fallback hidden"
+                    id="fallback"
+                >
+
+                    <div>
+
+                        <b>
+                            Voice unavailable
+                        </b>
+
+                        <p>
+                            Continue using text fallback.
+                        </p>
+
+                    </div>
+
+
+                    <!-- Text input -->
+                    <div>
+
+                        <input
+                            id="message"
+                            placeholder="Describe your issue"
+                        >
+
+                        <!-- Send button -->
+                        <button id="send">
+                            Send
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+
+            <!-- =========================
+                 RIGHT COLUMN
+                 ========================= -->
+
+            <section>
+
+
+                <!-- =========================
+                     DIAGNOSIS
+                     ========================= -->
+
+                <div class="card diagnosis">
+
+                    <div class="heading">
+
+                        <div>
+
+                            <label>
+                                DIAGNOSIS
+                            </label>
+
+                            <h3>
+                                What we're checking
+                            </h3>
+
+                        </div>
+
+
+                        <!-- Current progress -->
+                        <b id="progress">
+                            2 / 4
+                        </b>
+
+                    </div>
+
+
+                    <!-- JavaScript creates timeline here -->
+                    <div id="timeline"></div>
+
+                </div>
+
+
+
+                <!-- =========================
+                     APPROVAL
+                     ========================= -->
+
+                <div
+                    class="card approval"
+                    id="approval"
+                >
+
+                    <div class="approval-row">
+
+                        <div class="approval-icon">
+                            🔐
+                        </div>
+
+                        <div>
+
+                            <label>
+                                APPROVAL REQUIRED
+                            </label>
+
+                            <h3>
+                                Allow the approved support action?
+                            </h3>
+
+                            <p>
+                                The agent needs permission before
+                                changing a meeting setting.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- Approve / Cancel buttons -->
+                    <div class="actions">
+
+                        <button
+                            class="secondary"
+                            id="deny"
+                        >
+                            Cancel
+                        </button>
+
+                        <button
+                            class="primary"
+                            id="approve"
+                        >
+                            Approve action
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+
+                <!-- =========================
+                     VERIFICATION
+                     ========================= -->
+
+                <div
+                    class="card state hidden"
+                    id="verify"
+                >
+
+                    <div class="state-icon purple">
+                        ✓
+                    </div>
+
+                    <div>
+
+                        <label>
+                            VERIFICATION
+                        </label>
+
+                        <h3>
+                            Testing the fix…
+                        </h3>
+
+                        <p>
+                            Running a final check to confirm
+                            whether the fix worked.
+                        </p>
+
+                    </div>
+
+
+                    <!-- Loading spinner -->
+                    <span class="loader"></span>
+
+                </div>
+
+
+
+                <!-- =========================
+                     RESOLVED
+                     ========================= -->
+
+                <div
+                    class="card state hidden"
+                    id="resolved"
+                >
+
+                    <div class="state-icon green">
+                        ✓
+                    </div>
+
+                    <div>
+
+                        <label>
+                            RESOLVED
+                        </label>
+
+                        <h3>
+                            Your issue is fixed
+                        </h3>
+
+                        <p>
+                            The action was applied and
+                            successfully verified.
+                        </p>
+
+                    </div>
+
+
+                    <!-- Start a new session -->
+                    <button
+                        class="primary"
+                        id="new"
+                    >
+                        New session
+                    </button>
+
+                </div>
+
+
+
+                <!-- =========================
+                     ESCALATION
+                     ========================= -->
+
+                <div
+                    class="card escalation hidden"
+                    id="escalation"
+                >
+
+                    <div class="state-icon orange">
+                        !
+                    </div>
+
+                    <div>
+
+                        <label>
+                            ESCALATION
+                        </label>
+
+                        <h3>
+                            Needs Tier-2 support
+                        </h3>
+
+                        <p>
+                            The issue could not be verified
+                            automatically. The captured evidence
+                            is ready for escalation.
+                        </p>
+
+
+                        <!-- Evidence collected by the system -->
+                        <div class="evidence">
+
+                            <span>
+                                Symptom captured
+                            </span>
+
+                            <span>
+                                Diagnostics: 4
+                            </span>
+
+                            <span>
+                                Actions: 1
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- Create support ticket -->
+                    <button
+                        class="dark"
+                        id="ticket"
+                    >
+                        Create support ticket
+                    </button>
+
+                </div>
+
+            </section>
+
+        </div>
+
+
+
+        <!-- Footer -->
+        <footer>
+
+            MeetAssist • Microsoft Teams MVP
+
+            <span>
+                Safe actions are approval-gated and
+                verified before resolution.
+            </span>
+
+        </footer>
+
+    </main>
+
+</div>
+
+
+
+<!-- =========================
+     JAVASCRIPT
+     ========================= -->
+
+<script>
+
+
+// Shortcut function for finding an element by ID
+const $ = id => document.getElementById(id);
+
+
+// Get all issue/scenario buttons
+const buttons = document.querySelectorAll(".scenario");
+
+
+// Stores the currently selected issue
+let current = "microphone";
+
+
+
+/*
+    Adds a message to the conversation.
+
+    role = "user" or "agent"
+    text = message content
+*/
+function msg(role, text) {
+
+    // Create a new div
+    const x = document.createElement("div");
+
+    // Give it the msg class and role class
+    x.className = "msg " + role;
+
+
+    // Create the message HTML
+    x.innerHTML = `
+        <div class="avatar">
+            ${role === "user" ? "👤" : "✦"}
+        </div>
+
+        <div>
+            <b>
+                ${role === "user" ? "YOU" : "AGENT"}
+            </b>
+
+            <p>
+                ${text}
+            </p>
+        </div>
+    `;
+
+
+    // Add the message to the transcript
+    $("transcript").appendChild(x);
+}
+
+
+
+/*
+    Creates the diagnosis timeline.
+
+    steps = list of diagnosis steps
+*/
+function timeline(steps) {
+
+    // Clear the old timeline
+    $("timeline").innerHTML = "";
+
+
+    // Go through every step
+    steps.forEach(s => {
+
+        // Create a new timeline item
+        const x = document.createElement("div");
+
+        // Add its current state as a CSS class
+        x.className = "step " + s.state;
+
+
+        // Create the step content
+        x.innerHTML = `
+            <i>
+                ${
+                    s.state === "done"
+                        ? "✓"
+                        : s.state === "error"
+                        ? "!"
+                        : s.state === "current"
+                        ? "•"
+                        : "○"
+                }
+            </i>
+
+            <div>
+                <b>${s.title}</b>
+                <p>${s.detail}</p>
+            </div>
+        `;
+
+
+        // Add the step to the timeline
+        $("timeline").appendChild(x);
+
+    });
+}
+
+
+
+/*
+    Loads a selected scenario from Flask.
+*/
+async function load(name) {
+
+    // Save selected scenario
+    current = name;
+
+
+    // Request scenario data from Flask
+    const d = await (
+        await fetch("/api/scenario/" + name)
+    ).json();
+
+
+    // Update issue information
+    $("title").textContent = d.title;
+    $("subtitle").textContent = d.subtitle;
+    $("severity").textContent = d.severity;
+
+
+    // Clear previous conversation
+    $("transcript").innerHTML = "";
+
+
+    // Add initial conversation messages
+    msg("user", d.user);
+
+    msg(
+        "agent",
+        "I can help. I'll check the setup first, " +
+        "then verify the fix before we finish."
+    );
+
+
+    // Display diagnosis steps
+    timeline(d.steps);
+
+
+    // Show approval panel
+    $("approval").classList.remove("hidden");
+
+
+    // Hide other states
+    $("verify").classList.add("hidden");
+    $("resolved").classList.add("hidden");
+    $("escalation").classList.add("hidden");
+}
+
+
+
+// Handle clicking a scenario button
+buttons.forEach(b => {
+
+    b.onclick = () => {
+
+        // Remove active class from every button
+        buttons.forEach(
+            x => x.classList.remove("active")
+        );
+
+
+        // Make clicked button active
+        b.classList.add("active");
+
+
+        // Load selected scenario
+        load(b.dataset.name);
+    };
+
+});
+
+
+
+/*
+    Microphone button.
+
+    This is a simulated voice interaction.
+*/
+$("mic").onclick = () => {
+
+    // Add listening animation
+    $("mic").classList.add("listening");
+
+
+    // Change status text
+    $("voiceStatus").textContent =
+        "Listening… speak naturally";
+
+
+    // Wait 1.2 seconds to simulate recording
+    setTimeout(() => {
+
+        // Stop animation
+        $("mic").classList.remove("listening");
+
+
+        // Update status
+        $("voiceStatus").textContent =
+            "Voice captured";
+
+
+        // Add agent response
+        msg(
+            "agent",
+            "Got it. I have enough information to " +
+            "continue the diagnostic path."
+        );
+
+    }, 1200);
+
+};
+
+
+
+/*
+    Approve support action.
+*/
+$("approve").onclick = async () => {
+
+    // Hide approval panel
+    $("approval").classList.add("hidden");
+
+
+    // Show verification panel
+    $("verify").classList.remove("hidden");
+
+
+    // Simulate verification delay
+    await new Promise(
+        r => setTimeout(r, 1700)
+    );
+
+
+    // Send approval to Flask
+    const d = await (
+        await fetch(
+            "/api/action",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    approved: true
+                })
+            }
+        )
+    ).json();
+
+
+    // Hide verification
+    $("verify").classList.add("hidden");
+
+
+    // Show resolved state
+    $("resolved").classList.remove("hidden");
+
+
+    // Show backend response
+    msg("agent", d.message);
+
+};
+
+
+
+/*
+    Cancel support action.
+*/
+$("deny").onclick = async () => {
+
+    // Hide approval
+    $("approval").classList.add("hidden");
+
+
+    // Show escalation
+    $("escalation").classList.remove("hidden");
+
+
+    // Tell Flask that action was denied
+    const d = await (
+        await fetch(
+            "/api/action",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    approved: false
+                })
+            }
+        )
+    ).json();
+
+
+    // Display response
+    msg("agent", d.message);
+
+};
+
+
+
+/*
+    Create support ticket.
+*/
+$("ticket").onclick = async () => {
+
+    // Call ticket API
+    const d = await (
+        await fetch(
+            "/api/ticket",
+            {
+                method: "POST"
+            }
+        )
+    ).json();
+
+
+    // Change button text
+    $("ticket").textContent =
+        "Ticket created ✓";
+
+
+    // Prevent creating another ticket
+    $("ticket").disabled = true;
+
+
+    // Display ticket number
+    msg(
+        "agent",
+        "Support ticket " +
+        d.ticket_id +
+        " created with the captured evidence."
+    );
+
+};
+
+
+
+/*
+    Start a new session.
+*/
+$("new").onclick = () => load(current);
+
+
+
+/*
+    Send text fallback message.
+*/
+$("send").onclick = async () => {
+
+    // Get text from input and remove extra spaces
+    const text = $("message").value.trim();
+
+
+    // Stop if input is empty
+    if (!text) return;
+
+
+    // Show user's message
+    msg("user", text);
+
+
+    // Clear input
+    $("message").value = "";
+
+
+    // Send message to Flask
+    const d = await (
+        await fetch(
+            "/api/message",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    text: text
+                })
+            }
+        )
+    ).json();
+
+
+    // Show agent response
+    msg("agent", d.message);
+
+};
+
+
+
+// Check whether browser supports Speech Recognition
+if (
+    !(
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition
+    )
+) {
+
+    // If not supported, show text fallback
+    $("fallback")
+        .classList
+        .remove("hidden");
+}
+
+
+
+// Load microphone scenario when page starts
+load("microphone");
+
+
+
+/*
+    Handles manual issue correction.
+*/
+document
+    .getElementById("updateIssue")
+    .addEventListener("click", async () => {
+
+
+        // Get textarea
+        const input =
+            document.getElementById("issueInput");
+
+
+        // Get typed text
+        const text = input.value.trim();
+
+
+        // Stop if nothing was entered
+        if (!text) return;
+
+
+        // Show corrected issue in conversation
+        msg("user", text);
+
+
+        // Clear textarea
+        input.value = "";
+
+
+        // Send corrected issue to Flask
+        const response = await fetch(
+            "/api/message",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    text: text
+                })
+            }
+        );
+
+
+        // Convert response to JSON
+        const data = await response.json();
+
+
+        // Show agent's acknowledgement
+        msg("agent", data.message);
+
+    });
+
+</script>
+
+</body>
+
+</html>
