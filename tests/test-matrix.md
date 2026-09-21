@@ -11,7 +11,7 @@ This matrix tracks the scenarios used to evaluate the voice meeting support agen
 | MIC-006 | Repeated microphone information | check_mic | working | diagnosing | ☐ |
 | MIC-007 | Approved fix, verified | check_mic (x2) | blocked, then working | resolved | ☑ |
 | MIC-008 | Approved fix, verification fails | check_mic (x2) | blocked, then blocked | escalated | ☑ |
-| CAM-001 | Camera problem | check_camera | blocked | action_required | ☐ |
+| CAM-001 | Camera problem | check_camera | blocked | action_required | ☑ |
 | SPK-001 | Speaker problem | check_speaker | blocked | action_required | ☑ |
 | CON-001 | Connection problem | check_connection | unstable | diagnosing | ☑ |
 
