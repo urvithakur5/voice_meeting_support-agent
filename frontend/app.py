@@ -4,11 +4,11 @@
 # jsonify = sends JSON responses
 # request = receives data from the frontend
 from flask import Flask, render_template, jsonify, request
-
+import requests
 
 # Create the Flask application
 app = Flask(__name__)
-
+BACKEND_URL = "http://127.0.0.1:8000"
 
 # Predefined IT support scenarios
 # Each scenario contains:
@@ -62,18 +62,42 @@ def index():
 # API endpoint for getting a selected scenario
 @app.get("/api/scenario/<name>")
 def get_scenario(name):
-
-    # Check whether the requested scenario exists
     if name not in SCENARIOS:
-        return jsonify({
-            "error": "Unknown scenario"
-        }), 404
+        return jsonify({"error": "Unknown scenario"}), 404
 
-    # Get information about the selected scenario
     title, subtitle, severity, icon, user = SCENARIOS[name]
 
+    scenario_ids = {
+        "microphone": "MIC-001",
+        "camera": "CAM-001",
+        "audio": "SPK-001",
+        "connectivity": "CON-001"
+    }
 
-    # Select the diagnostic check according to the issue
+    requests.post(
+        f"{BACKEND_URL}/scenario",
+        json={"id": scenario_ids[name]}
+    )
+
+    backend_result = None
+
+    if name == "microphone":
+        backend_result = requests.get(
+            f"{BACKEND_URL}/diagnostics/mic"
+        ).json()
+    elif name == "camera":
+        backend_result = requests.get(
+            f"{BACKEND_URL}/diagnostics/camera"
+        ).json()
+    elif name == "audio":
+        backend_result = requests.get(
+            f"{BACKEND_URL}/diagnostics/speaker"
+        ).json()
+    elif name == "connectivity":
+        backend_result = requests.get(
+            f"{BACKEND_URL}/diagnostics/connection"
+        ).json()
+
     check = {
         "microphone": "Check microphone",
         "camera": "Check camera",
@@ -81,37 +105,28 @@ def get_scenario(name):
         "connectivity": "Check connection"
     }[name]
 
-
-    # Send the scenario information back to JavaScript as JSON
     return jsonify({
-
         "title": title,
         "subtitle": subtitle,
         "severity": severity,
         "icon": icon,
         "user": user,
-
-        # Diagnostic timeline
         "steps": [
-
             {
                 "title": "Capture complaint",
                 "detail": "Natural language issue received.",
                 "state": "done"
             },
-
             {
                 "title": check,
-                "detail": "Diagnostic device/status check completed.",
+                "detail": f"Backend result: {backend_result.get('status', 'unknown')}",
                 "state": "done"
             },
-
             {
                 "title": "Check permissions",
                 "detail": "A setting needs attention.",
                 "state": "current"
             },
-
             {
                 "title": "Verify fix",
                 "detail": "Run a final test.",
@@ -120,35 +135,94 @@ def get_scenario(name):
         ]
     })
 
-
 # API endpoint called when the user approves or denies an action
 @app.post("/api/action")
 def action():
 
-    # Get JSON data sent by the frontend
     data = request.get_json(silent=True) or {}
 
-
-    # If the user approved the action
-    if data.get("approved"):
-
+    # User denied the action
+    if not data.get("approved"):
         return jsonify({
-            "status": "verified",
+            "status": "escalated",
             "message": (
-                "The fix has been applied and verified. "
-                "Your issue is resolved."
+                "No changes were made. "
+                "Diagnostic evidence is ready for escalation."
             )
         })
 
+    # Get the selected scenario
+    scenario = data.get("scenario", "CAM-001")
 
-    # If the user denied the action
+    action_endpoints = {
+        "MIC-001": "/actions/microphone",
+        "CAM-001": "/actions/camera",
+        "SPK-001": "/actions/speaker"
+    }
+
+    endpoint = action_endpoints.get(scenario)
+
+    if not endpoint:
+        return jsonify({
+            "status": "error",
+            "message": "No supported action is available for this scenario."
+        }), 400
+
+    # Call the real backend action
+    backend_response = requests.post(
+        f"{BACKEND_URL}{endpoint}",
+        json={"approved": True}
+    )
+
+    result = backend_response.json()
+
+    if result.get("success"):
+
+        verify_endpoints = {
+            "MIC-001": "/diagnostics/mic",
+            "CAM-001": "/diagnostics/camera",
+            "SPK-001": "/diagnostics/speaker"
+        }
+
+        verify_endpoint = verify_endpoints.get(scenario)
+
+        if verify_endpoint:
+            verification = requests.get(
+                f"{BACKEND_URL}{verify_endpoint}"
+            ).json()
+
+            if verification.get("status") == "working":
+                return jsonify({
+                    "status": "verified",
+                    "message": (
+                        "The fix has been applied and "
+                        "verified successfully."
+                    )
+                })
+
+            return jsonify({
+                "status": "verification_failed",
+                "message": (
+                    "The action was applied, but the issue "
+                    "is still blocked after verification."
+                )
+            })
+
+        return jsonify({
+            "status": "verified",
+            "message": result.get(
+                "message",
+                "The fix has been applied successfully."
+            )
+        })
+
     return jsonify({
-        "status": "escalated",
-        "message": (
-            "No changes were made. "
-            "Diagnostic evidence is ready for escalation."
+        "status": "error",
+        "message": result.get(
+            "message",
+            "The backend could not apply the fix."
         )
-    })
+    }), 400
 
 
 # API endpoint for creating a support ticket

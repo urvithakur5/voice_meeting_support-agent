@@ -852,9 +852,15 @@ $("approve").onclick = async () => {
                         "application/json"
                 },
 
-                body: JSON.stringify({
-                    approved: true
-                })
+               body: JSON.stringify({
+                   approved: true,
+                   scenario: {
+                        microphone: "MIC-001",
+                        camera: "CAM-001",
+                        audio: "SPK-001",
+                        connectivity: "CON-001"
+    }[current]
+})
             }
         )
     ).json();
@@ -955,7 +961,7 @@ $("ticket").onclick = async () => {
 /*
     Start a new session.
 */
-$("new").onclick = () => load("microphone");
+$("new").onclick = () => load(current);
 
 
 
