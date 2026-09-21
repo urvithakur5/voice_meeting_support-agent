@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MeetAssist — Voice Meeting Support Agent</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app">
+<aside>
+  <div class="brand"><div class="logo">◉</div><div><b>MeetAssist</b><small>IT Helpdesk Agent</small></div></div>
+  <div class="side-label">CURRENT SESSION</div>
+  <div class="session"><i></i><div><b>Meeting Support</b><small>Session #MS-2048</small></div></div>
+  <div class="side-label">ISSUE</div>
+  {% for key,item in scenarios.items() %}
+  <button class="scenario {% if key=='microphone' %}active{% endif %}" data-name="{{key}}">
+    <span>{{item[3]}}</span><span>{{item[0]}}</span>
+  </button>
+  {% endfor %}
+  <div class="side-bottom">● Azure services connected<br><small>Text fallback available if voice fails.</small></div>
+</aside>
+
+<main>
+<header><div><label>REAL-TIME VOICE SUPPORT</label><h1>Voice Meeting Support Agent</h1></div><div class="connected">● Connected</div></header>
+
+<div class="grid">
+<section>
+  <div class="card issue"><div><label>CURRENT ISSUE</label><h2 id="title">Microphone not working</h2><p id="subtitle">The agent is diagnosing your Microsoft Teams meeting issue.</p></div><strong id="severity">URGENT</strong></div>
+
+  <div class="card conversation">
+    <div class="heading"><div><label>CONVERSATION</label><h3>Live transcript</h3></div><em>● LIVE</em></div>
+    <div id="transcript"></div>
+
+<!-- Manual issue correction -->
+<div class="manual-input">
+    <div class="manual-label">
+        ✍️ <span>Didn't hear that correctly?</span>
+    </div>
+    <textarea
+        id="issueInput"
+        placeholder="Type your issue here..."
+        rows="3"
+    ></textarea>
+    <button id="updateIssue" class="primary">
+        Update Issue
+    </button>
+</div>
+
+<div class="voice"><p id="voiceStatus">Tap the microphone to speak</p><button id="mic">🎙</button><small>Voice-first • Text fallback available</small></div>
+  </div>
+
+  <div class="card fallback hidden" id="fallback">
+    <div><b>Voice unavailable</b><p>Continue using text fallback.</p></div>
+    <div><input id="message" placeholder="Describe your issue"><button id="send">Send</button></div>
+  </div>
+</section>
+
+<section>
+  <div class="card diagnosis"><div class="heading"><div><label>DIAGNOSIS</label><h3>What we're checking</h3></div><b id="progress">2 / 4</b></div><div id="timeline"></div></div>
+
+  <div class="card approval" id="approval">
+    <div class="approval-row"><div class="approval-icon">🔐</div><div><label>APPROVAL REQUIRED</label><h3>Allow the approved support action?</h3><p>The agent needs permission before changing a meeting setting.</p></div></div>
+    <div class="actions"><button class="secondary" id="deny">Cancel</button><button class="primary" id="approve">Approve action</button></div>
+  </div>
+
+  <div class="card state hidden" id="verify"><div class="state-icon purple">✓</div><div><label>VERIFICATION</label><h3>Testing the fix…</h3><p>Running a final check to confirm whether the fix worked.</p></div><span class="loader"></span></div>
+
+  <div class="card state hidden" id="resolved"><div class="state-icon green">✓</div><div><label>RESOLVED</label><h3>Your issue is fixed</h3><p>The action was applied and successfully verified.</p></div><button class="primary" id="new">New session</button></div>
+
+  <div class="card escalation hidden" id="escalation"><div class="state-icon orange">!</div><div><label>ESCALATION</label><h3>Needs Tier-2 support</h3><p>The issue could not be verified automatically. The captured evidence is ready for escalation.</p><div class="evidence"><span>Symptom captured</span><span>Diagnostics: 4</span><span>Actions: 1</span></div></div><button class="dark" id="ticket">Create support ticket</button></div>
+</section>
+</div>
+<footer>MeetAssist • Microsoft Teams MVP <span>Safe actions are approval-gated and verified before resolution.</span></footer>
+</main>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const buttons=document.querySelectorAll(".scenario");
+let current="microphone";
+
+function msg(role,text){
+  const x=document.createElement("div"); x.className="msg "+role;
+  x.innerHTML=`<div class="avatar">${role==="user"?"👤":"✦"}</div><div><b>${role==="user"?"YOU":"AGENT"}</b><p>${text}</p></div>`;
+  $("transcript").appendChild(x);
+}
+function timeline(steps){
+  $("timeline").innerHTML="";
+  steps.forEach(s=>{
+    const x=document.createElement("div"); x.className="step "+s.state;
+    x.innerHTML=`<i>${s.state==="done"?"✓":s.state==="error"?"!":s.state==="current"?"•":"○"}</i><div><b>${s.title}</b><p>${s.detail}</p></div>`;
+    $("timeline").appendChild(x);
+  });
+}
+async function load(name){
+  current=name;
+  const d=await (await fetch("/api/scenario/"+name)).json();
+  $("title").textContent=d.title; $("subtitle").textContent=d.subtitle; $("severity").textContent=d.severity;
+  $("transcript").innerHTML="";
+  msg("user",d.user); msg("agent","I can help. I'll check the setup first, then verify the fix before we finish.");
+  timeline(d.steps);
+  $("approval").classList.remove("hidden"); $("verify").classList.add("hidden"); $("resolved").classList.add("hidden"); $("escalation").classList.add("hidden");
+}
+buttons.forEach(b=>b.onclick=()=>{buttons.forEach(x=>x.classList.remove("active"));b.classList.add("active");load(b.dataset.name)});
+
+$("mic").onclick=()=>{
+  $("mic").classList.add("listening"); $("voiceStatus").textContent="Listening… speak naturally";
+  setTimeout(()=>{$("mic").classList.remove("listening");$("voiceStatus").textContent="Voice captured";msg("agent","Got it. I have enough information to continue the diagnostic path.");},1200);
+};
+$("approve").onclick=async()=>{
+  $("approval").classList.add("hidden");$("verify").classList.remove("hidden");
+  await new Promise(r=>setTimeout(r,1700));
+  const d=await (await fetch("/api/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({approved:true})})).json();
+  $("verify").classList.add("hidden");$("resolved").classList.remove("hidden");msg("agent",d.message);
+};
+$("deny").onclick=async()=>{
+  $("approval").classList.add("hidden");$("escalation").classList.remove("hidden");
+  const d=await (await fetch("/api/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({approved:false})})).json();
+  msg("agent",d.message);
+};
+$("ticket").onclick=async()=>{
+  const d=await (await fetch("/api/ticket",{method:"POST"})).json();
+  $("ticket").textContent="Ticket created ✓";$("ticket").disabled=true;msg("agent","Support ticket "+d.ticket_id+" created with the captured evidence.");
+};
+$("new").onclick=()=>load(current);
+$("send").onclick=async()=>{
+  const text=$("message").value.trim(); if(!text)return; msg("user",text);$("message").value="";
+  const d=await (await fetch("/api/message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})})).json();msg("agent",d.message);
+};
+if(!(window.SpeechRecognition||window.webkitSpeechRecognition)) $("fallback").classList.remove("hidden");
+load("microphone");
+document.getElementById("updateIssue").addEventListener("click", async () => {
+
+    const input = document.getElementById("issueInput");
+    const text = input.value.trim();
+
+    if (!text) return;
+
+    // Show the correction in the conversation
+    msg("user", text);
+
+    // Clear input
+    input.value = "";
+
+    // Tell backend about corrected issue
+    const response = await fetch("/api/message", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            text: text
+        })
+    });
+
+    const data = await response.json();
+
+    // Agent acknowledges correction
+    msg("agent", data.message);
+});
+</script>
+</body>
+</html>
