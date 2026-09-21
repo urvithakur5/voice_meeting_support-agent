@@ -1,11 +1,6 @@
-def check_connectivity():
-    # Return network connectivity diagnostic result
-    return {
-        "tool": "check_connectivity",
-        "status": "failure",
-        "network_connected": True,
-        "internet_available": False,
+from services.scenario import get_tool_result
 
-        # Explain the connectivity issue
-        "message": "Network is connected but internet access is unavailable."
-    }
+
+def check_connection():
+    # Return the current network connection diagnostic result
+    return get_tool_result("connection")

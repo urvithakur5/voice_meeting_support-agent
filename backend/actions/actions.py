@@ -1,27 +1,36 @@
+from services.scenario import apply_fix
+
+
 def fix_microphone():
-    # Unmute the microphone
+    # Apply the approved microphone fix
+    apply_fix("mic")
+
     return {
         "action": "unmute_microphone",
         "success": True,
-        "message": "Microphone has been unmuted."
+        "message": "Microphone fix has been applied."
     }
 
 
 def fix_camera():
-    # Restart the camera
+    # Apply the approved camera fix
+    apply_fix("camera")
+
     return {
         "action": "restart_camera",
         "success": True,
-        "message": "Camera has been restarted."
+        "message": "Camera fix has been applied."
     }
 
 
 def fix_speaker():
-    # Restart the speaker
+    # Apply the approved speaker fix
+    apply_fix("speaker")
+
     return {
         "action": "restart_speaker",
         "success": True,
-        "message": "Speaker has been restarted."
+        "message": "Speaker fix has been applied."
     }
 
 

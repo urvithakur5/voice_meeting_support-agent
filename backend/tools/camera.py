@@ -1,13 +1,6 @@
-def check_camera():
-    # Return camera diagnostic result
-    return {
-        "tool": "check_camera",
-        "status": "failure",
-        "device": "Default Camera",
-        "device_connected": True,
-        "permission": True,
-        "working": False,
+from services.scenario import get_tool_result
 
-        # Explain the camera issue
-        "message": "Camera is connected but not working."
-    }
+
+def check_camera():
+    # Return the current camera diagnostic result
+    return get_tool_result("camera")
