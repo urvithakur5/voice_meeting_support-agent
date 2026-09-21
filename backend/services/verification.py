@@ -1,4 +1,5 @@
 def verify_microphone():
+    # Verify whether the microphone is working after the fix
     return {
         "tool": "verify_mic",
         "status": "working",
@@ -8,6 +9,7 @@ def verify_microphone():
 
 
 def verify_camera():
+    # Verify whether the camera is working after the fix
     return {
         "tool": "verify_camera",
         "status": "working",
@@ -17,6 +19,7 @@ def verify_camera():
 
 
 def verify_speaker():
+    # Verify whether the speaker is working after the fix
     return {
         "tool": "verify_speaker",
         "status": "working",

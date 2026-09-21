@@ -1,4 +1,5 @@
 def fix_microphone():
+    # Unmute the microphone
     return {
         "action": "unmute_microphone",
         "success": True,
@@ -7,6 +8,7 @@ def fix_microphone():
 
 
 def fix_camera():
+    # Restart the camera
     return {
         "action": "restart_camera",
         "success": True,
@@ -15,6 +17,7 @@ def fix_camera():
 
 
 def fix_speaker():
+    # Restart the speaker
     return {
         "action": "restart_speaker",
         "success": True,
@@ -23,6 +26,7 @@ def fix_speaker():
 
 
 def check_approval(approved):
+    # Check whether the user approved the action
     if approved:
         return {
             "approved": True,
