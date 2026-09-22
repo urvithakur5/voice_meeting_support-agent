@@ -745,4 +745,86 @@ footer {
     footer {
         display: none;
     }
+}  
+/* Better balanced dashboard layout */
+
+main {
+    width: calc(100% - 260px);
+    margin-left: 260px;
+    max-width: 1400px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: minmax(500px, 1fr) minmax(380px, 0.8fr);
+    gap: 28px;
+    align-items: start;
+}
+
+.grid > section {
+    min-width: 0;
+}
+
+.conversation {
+    min-height: 520px;
+}
+
+@media (max-width: 1000px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+}
+/* Use the full available main area */
+main {
+    width: calc(100% - 260px);
+    margin-left: 260px;
+    max-width: none;
+}
+
+/* Make the main dashboard use the full width */
+.grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+    gap: 20px;
+}
+
+/* Make conversation use full width */
+.grid > section {
+    width: 100%;
+}
+
+.conversation {
+    width: 100%;
+    min-height: 520px;
+}
+/* Normal screen: conversation uses full width */
+.grid {
+    grid-template-columns: 1fr;
+}
+
+/* When diagnosis appears: move process to the right */
+.grid:has(.diagnosis:not(.hidden)) {
+    grid-template-columns: minmax(0, 1.15fr) minmax(350px, 0.85fr);
+    gap: 24px;
+}
+
+/* Keep diagnosis and approval stacked on the right */
+.grid > section:last-child {
+    display: flex;
+    flex-direction: column;
+    gap: 17px;
+}
+
+/* Show diagnosis on the right when troubleshooting starts */
+
+.grid:has(.diagnosis:not(.hidden)) {
+    grid-template-columns: minmax(0, 1.15fr) minmax(350px, 0.85fr);
+    gap: 24px;
+}
+
+.grid > section:last-child {
+    display: flex;
+    flex-direction: column;
+    gap: 17px;
 }

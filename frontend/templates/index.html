@@ -342,7 +342,7 @@
                      DIAGNOSIS
                      ========================= -->
 
-                <div class="card diagnosis">
+                <div class="card diagnosis hidden" id="diagnosis">
 
                     <div class="heading">
 
@@ -379,8 +379,8 @@
                      ========================= -->
 
                 <div
-                    class="card approval"
-                    id="approval"
+                class="card approval hidden"
+                id="approval"
                 >
 
                     <div class="approval-row">
@@ -732,13 +732,6 @@ async function load(name) {
 
 
     // Add initial conversation messages
-    msg("user", d.user);
-
-    msg(
-        "agent",
-        "I can help. I'll check the setup first, " +
-        "then verify the fix before we finish."
-    );
 
 
     // Display diagnosis steps
@@ -746,7 +739,9 @@ async function load(name) {
 
 
     // Show approval panel
-    $("approval").classList.remove("hidden");
+   // Show approval panel
+    // Keep approval hidden until an action is actually required
+    $("approval").classList.add("hidden");
 
 
     // Hide other states
@@ -785,38 +780,49 @@ buttons.forEach(b => {
 
     This is a simulated voice interaction.
 */
-$("mic").onclick = () => {
+$("mic").onclick = async () => {
 
-    // Add listening animation
     $("mic").classList.add("listening");
+    $("voiceStatus").textContent = "Listening...";
 
+    const response = await fetch("/api/voice", {
+        method: "POST"
+    });
 
-    // Change status text
-    $("voiceStatus").textContent =
-        "Listening… speak naturally";
+    const data = await response.json();
 
+    $("mic").classList.remove("listening");
 
-    // Wait 1.2 seconds to simulate recording
-    setTimeout(() => {
+    if (data.success) {
 
-        // Stop animation
-        $("mic").classList.remove("listening");
+        $("voiceStatus").textContent = "Voice captured";
 
+        // Show actual user question
+        msg("user", data.user_text);
 
-        // Update status
-        $("voiceStatus").textContent =
-            "Voice captured";
+        // Show diagnosis process
+        $("diagnosis").classList.remove("hidden");
 
-
-        // Add agent response
-        msg(
-            "agent",
-            "Got it. I have enough information to " +
-            "continue the diagnostic path."
+        // Load current diagnosis steps
+        const scenarioResponse = await fetch(
+            "/api/scenario/" + current
         );
 
-    }, 1200);
+        const scenario = await scenarioResponse.json();
 
+        timeline(scenario.steps);
+
+        // Show agent response
+        msg("agent", data.message);
+
+        // Approval will stay hidden until actually required
+        $("approval").classList.add("hidden");
+
+    } else {
+
+        $("voiceStatus").textContent = "Voice error";
+        msg("agent", data.message);
+    }
 };
 
 
@@ -1087,7 +1093,20 @@ document
 
         // Show agent's acknowledgement
         msg("agent", data.message);
+        // Show diagnosis process
+$("diagnosis").classList.remove("hidden");
 
+// Load diagnosis steps
+const scenarioResponse = await fetch(
+    "/api/scenario/" + current
+);
+
+const scenario = await scenarioResponse.json();
+
+timeline(scenario.steps);
+
+// Keep approval hidden until action is required
+$("approval").classList.add("hidden");
     });
 
 </script>

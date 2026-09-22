@@ -1,7 +1,7 @@
 import os
 import azure.cognitiveservices.speech as speechsdk
 from dotenv import load_dotenv
-
+import requests
 load_dotenv()
 
 SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY")
@@ -58,8 +58,20 @@ def listen():
 
 
 def generate_response(user_text):
-    text = user_text.lower()
+ text = user_text.lower()
+ if "microphone" in text or "mic" in text:
+    try:
+        result = requests.get(
+            "http://127.0.0.1:8000/api/check_mic",
+            params={"device": "default"},
+            timeout=5
+        )
 
+        data = result.json()
+        return f"Microphone status: {data.get('status')}. {data.get('message')}"
+
+    except Exception:
+        return "I could not connect to the diagnostic backend."
     if "wifi" in text or "internet" in text:
         return (
             "I can help troubleshoot your internet connection. "

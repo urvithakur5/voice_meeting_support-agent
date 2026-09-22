@@ -5,7 +5,25 @@
 # request = receives data from the frontend
 from flask import Flask, render_template, jsonify, request
 import requests
+import os
+import azure.cognitiveservices.speech as speechsdk
+from dotenv import load_dotenv
 
+load_dotenv("../voice/.env")
+
+SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY")
+SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION")
+
+speech_config = speechsdk.SpeechConfig(
+    subscription=SPEECH_KEY,
+    region=SPEECH_REGION
+)
+
+speech_config.speech_recognition_language = "en-IN"
+
+recognizer = speechsdk.SpeechRecognizer(
+    speech_config=speech_config
+)
 # Create the Flask application
 app = Flask(__name__)
 BACKEND_URL = "http://127.0.0.1:8000"
@@ -134,7 +152,44 @@ def get_scenario(name):
             }
         ]
     })
+@app.post("/api/voice")
+def voice():
 
+    result = recognizer.recognize_once_async().get()
+
+    if result.reason == speechsdk.ResultReason.RecognizedSpeech:
+
+        user_text = result.text
+        text = user_text.lower()
+
+        if "microphone" in text or "mic" in text:
+
+            backend_response = requests.get(
+                f"{BACKEND_URL}/api/check_mic",
+                params={"device": "default"}
+            )
+
+            data = backend_response.json()
+
+            return jsonify({
+                "success": True,
+                "user_text": user_text,
+                "message": (
+                    f"Microphone status: {data.get('status')}. "
+                    f"{data.get('message')}"
+                )
+            })
+
+        return jsonify({
+            "success": True,
+            "user_text": user_text,
+            "message": "I understood your request. Please give me more details."
+        })
+
+    return jsonify({
+        "success": False,
+        "message": "I could not understand the speech."
+    })
 # API endpoint called when the user approves or denies an action
 @app.post("/api/action")
 def action():
@@ -169,9 +224,20 @@ def action():
         }), 400
 
     # Call the real backend action
+        # Call the real backend action
+    action_names = {
+        "MIC-001": "fix_microphone_permissions",
+        "CAM-001": "restart_camera",
+        "SPK-001": "restart_speaker"
+    }
+
     backend_response = requests.post(
-        f"{BACKEND_URL}{endpoint}",
-        json={"approved": True}
+        f"{BACKEND_URL}/api/actions",
+        json={
+            "session_id": "MS-2048",
+            "action_name": action_names[scenario],
+            "user_approved": True
+        }
     )
 
     result = backend_response.json()
