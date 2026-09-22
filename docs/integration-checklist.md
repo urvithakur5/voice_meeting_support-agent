@@ -8,7 +8,7 @@
 | Agent receives transcript | ☐ |
 | Agent selects correct diagnostic tool | ☐ |
 | Tool response reaches agent | ☐ |
-| Agent response reaches frontend | ☑ |
+| Agent response reaches frontend ☐ |  |
 | Approval flow works | ☑ |
 | Verification flow works | ☑ |
 | Escalation flow works | ☑ |

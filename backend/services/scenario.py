@@ -41,6 +41,19 @@ SCENARIOS = {
             "message": "Microphone diagnostic timed out."
         }
     },
+        "MIC-004": {
+        "tool": "mic",
+        "before": {
+            "status": "blocked",
+            "error_code": "permission_denied",
+            "message": "Microphone permission is denied."
+        },
+        "after": {
+            "status": "blocked",
+            "error_code": "permission_denied",
+            "message": "Microphone permission is still denied after the fix."
+        }
+    },
 
     "MIC-001": {
         "tool": "mic",
@@ -67,6 +80,19 @@ SCENARIOS = {
             "status": "working",
             "error_code": "none",
             "message": "Microphone is working correctly."
+        }
+    },
+        "MIC-002": {
+        "tool": "mic",
+        "before": {
+            "status": "blocked",
+            "error_code": "permission_denied",
+            "message": "Microphone permission is denied."
+        },
+        "after": {
+            "status": "blocked",
+            "error_code": "permission_denied",
+            "message": "Microphone permission is still denied after the fix."
         }
     },
         "MIC-005": {
