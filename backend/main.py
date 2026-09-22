@@ -1,24 +1,14 @@
-from fastapi import FastAPI, HTTPException
+from uuid import uuid4
+
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
-from tools.microphone import check_mic
-from tools.camera import check_camera
-from tools.speaker import check_speaker
-from tools.connectivity import check_connection
-
-from actions.actions import (
-    fix_microphone,
-    fix_camera,
-    fix_speaker,
-    check_approval
-)
-
 from services.scenario import (
+    apply_fix,
+    get_tool_result,
     set_scenario,
     get_current_scenario
 )
-
-from services.ticket import create_ticket
 from services.logger import log_event
 
 
@@ -26,21 +16,21 @@ from services.logger import log_event
 app = FastAPI(title="Voice Meeting Support Backend")
 
 
-# Request model for approved actions
-class ActionRequest(BaseModel):
-    approved: bool
-
-
 # Request model for selecting a test scenario
 class ScenarioRequest(BaseModel):
     id: str
 
 
-# Request model for creating an IT support ticket
+class ActionRequest(BaseModel):
+    session_id: str
+    action_name: str
+    user_approved: bool
+
+
 class TicketRequest(BaseModel):
     issue: str
-    diagnostics: list[str]
-    actions: list[str]
+    diagnostics_run: list[dict]
+    actions_attempted: list[dict]
     result: str
 
 
@@ -67,81 +57,80 @@ def change_scenario(request: ScenarioRequest):
     }
 
 
-@app.get("/diagnostics/mic")
-def microphone_diagnostic():
-    # Run the microphone diagnostic
-    return check_mic()
+def _diagnostic(tool: str, device: str | None = None):
+    result = get_tool_result(tool)
+    if device is not None:
+        result = {**result, "device": device}
+
+    return {
+        "status": result.get("status", "error"),
+        "error_code": result.get("error_code", "tool_error"),
+        "message": result.get("message", "Diagnostic failed."),
+    }
 
 
-@app.get("/diagnostics/camera")
-def camera_diagnostic():
-    # Run the camera diagnostic
-    return check_camera()
+@app.get("/api/check_mic")
+def microphone_diagnostic(device: str = Query(default="default")):
+    return _diagnostic("mic", device)
 
 
-@app.get("/diagnostics/speaker")
-def speaker_diagnostic():
-    # Run the speaker diagnostic
-    return check_speaker()
+@app.get("/api/check_camera")
+def camera_diagnostic(device: str = Query(default="default")):
+    return _diagnostic("camera", device)
 
 
-@app.get("/diagnostics/connection")
-def connection_diagnostic():
-    # Run the network connection diagnostic
-    return check_connection()
+@app.get("/api/check_speaker")
+def speaker_diagnostic(device: str = Query(default="default")):
+    return _diagnostic("speaker", device)
 
 
-@app.post("/approval")
-def approval(approved: bool):
-    # Check whether the user approved an action
-    return check_approval(approved)
+@app.get("/api/check_connectivity")
+def connectivity_diagnostic():
+    return _diagnostic("connectivity")
 
 
-@app.post("/actions/microphone")
-def microphone_action(request: ActionRequest):
-    # Only perform the microphone action after user approval
-    if not request.approved:
+@app.post("/api/actions")
+def execute_action(request: ActionRequest):
+    if not request.user_approved:
         return {
-            "success": False,
-            "message": "User approval is required before this action."
+            "status": "blocked",
+            "error_code": "approval_required",
+            "message": "User approval is required before this action.",
         }
 
-    return fix_microphone()
-
-
-@app.post("/actions/camera")
-def camera_action(request: ActionRequest):
-    # Only perform the camera action after user approval
-    if not request.approved:
+    action_tools = {
+        "fix_microphone_permissions": "mic",
+        "unmute_microphone": "mic",
+        "restart_camera": "camera",
+        "restart_speaker": "speaker",
+        "restart_network": "connectivity",
+    }
+    tool = action_tools.get(request.action_name)
+    if tool is None:
         return {
-            "success": False,
-            "message": "User approval is required before this action."
+            "status": "error",
+            "error_code": "unsupported_action",
+            "message": f"Unsupported action: {request.action_name}",
         }
 
-    return fix_camera()
+    apply_fix(tool)
+    return {
+        "status": "working",
+        "error_code": "none",
+        "message": f"Action '{request.action_name}' applied for session {request.session_id}.",
+    }
 
 
-@app.post("/actions/speaker")
-def speaker_action(request: ActionRequest):
-    # Only perform the speaker action after user approval
-    if not request.approved:
-        return {
-            "success": False,
-            "message": "User approval is required before this action."
-        }
-
-    return fix_speaker()
-
-
-@app.post("/tickets")
+@app.post("/api/tickets")
 def ticket_creation(request: TicketRequest):
-    # Create the ticket using the data received in the request
-    return create_ticket(
-        issue=request.issue,
-        diagnostics=request.diagnostics,
-        actions=request.actions,
-        result=request.result
-    )
+    return {
+        "ticket_id": f"INC-{uuid4().hex[:8].upper()}",
+        "issue": request.issue,
+        "diagnostics": request.diagnostics_run,
+        "actions": request.actions_attempted,
+        "result": request.result,
+        "status": "open",
+    }
 
 
 @app.post("/logs")

@@ -11,7 +11,7 @@ from typing import Any
 import requests
 from azure.ai.projects import AIProjectClient
 from azure.ai.agents.models import MessageRole, ToolOutput
-from azure.identity import DefaultAzureCredential
+from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -47,6 +47,24 @@ def print_environment_diagnostic() -> None:
         for name, detected in checks.items()
     )
     print(f"[startup] Environment configuration: {summary}")
+
+
+def build_azure_credential():
+    """Prefer the configured service principal over a cached developer login."""
+    client_id = os.environ.get("AZURE_CLIENT_ID")
+    tenant_id = os.environ.get("AZURE_TENANT_ID")
+    client_secret = os.environ.get("AZURE_CLIENT_SECRET")
+
+    if client_id and tenant_id and client_secret:
+        print("[startup] Azure credential: configured service principal")
+        return ClientSecretCredential(
+            tenant_id=tenant_id,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+
+    print("[startup] Azure credential: DefaultAzureCredential chain")
+    return DefaultAzureCredential()
 
 
 def request_backend(method: str, path: str, **kwargs: Any) -> dict:
@@ -310,7 +328,7 @@ def run_agent() -> None:
 
     client = AIProjectClient(
         endpoint=PROJECT_ENDPOINT,
-        credential=DefaultAzureCredential(),
+        credential=build_azure_credential(),
     )
     agent = client.agents.get_agent(AGENT_ID)
     thread = client.agents.threads.create()

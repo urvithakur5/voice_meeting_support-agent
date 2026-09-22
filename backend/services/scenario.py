@@ -111,15 +111,15 @@ SCENARIOS = {
     },
 
     "CON-001": {
-        "tool": "connection",
+        "tool": "connectivity",
         "before": {
-            "status": "unstable",
-            "error_code": "none",
+            "status": "error",
+            "error_code": "network_unstable",
             "message": "Network connection is unstable."
         },
         "after": {
-            "status": "unstable",
-            "error_code": "none",
+            "status": "error",
+            "error_code": "network_unstable",
             "message": "Network connection is unstable."
         }
     }
