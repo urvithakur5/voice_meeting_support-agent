@@ -1,189 +1,181 @@
 const API_URL = "http://localhost:3002/agent/message";
 const sessionId = sessionStorage.getItem("meetassist-session") || crypto.randomUUID();
 sessionStorage.setItem("meetassist-session", sessionId);
-
 const $ = (id) => document.getElementById(id);
-let lastUserText = "";
 let recognition;
-
-function addMessage(role, text) {
-    const item = document.createElement("div");
-    item.className = `msg ${role}`;
-    const avatar = document.createElement("div");
-    avatar.className = "avatar";
-    avatar.textContent = role === "user" ? "YOU" : "AI";
-    const content = document.createElement("div");
-    const sender = document.createElement("b");
-    sender.textContent = role === "user" ? "YOU" : "AGENT";
-    const body = document.createElement("p");
-    body.textContent = text;
-    content.append(sender, body);
-    item.append(avatar, content);
-    $("transcript").appendChild(item);
-    $("transcript").scrollTop = $("transcript").scrollHeight;
-}
+let isSubmitting = false;
+let finalVoiceText = "";
+let silenceTimer;
+let speechEnded = false;
+let stopRequested = false;
+let liveTranscriptRow;
 
 function speak(text) {
-    if (!text || !("speechSynthesis" in window)) return;
+    const speechText = String(text || "").trim();
+    if (!speechText || /failed to fetch|network error|could not reach support/i.test(speechText) || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
+    const utterance = new SpeechSynthesisUtterance(speechText);
+    utterance.rate = 0.96;
+    utterance.pitch = 1.02;
     window.speechSynthesis.speak(utterance);
 }
 
-function checklistItem(item) {
+function addTranscript(role, text) {
+    const transcript = $("transcript");
+    const empty = transcript.querySelector(".empty-transcript");
+    if (empty) empty.remove();
+    const row = document.createElement("div");
+    row.className = `transcript-line ${role}`;
+    const label = document.createElement("span");
+    label.className = "transcript-label";
+    label.textContent = role === "user" ? "YOU" : "AGENT";
+    const quote = document.createElement("p");
+    quote.textContent = `“${text}”`;
+    row.append(label, quote);
+    transcript.appendChild(row);
+}
+
+function normalizeCheck(item) {
     if (typeof item === "string") return { title: item, detail: "", state: "current" };
     const state = item.state || item.status || (item.passed ? "done" : "error");
-    return {
-        title: item.title || item.name || item.check || "Diagnostic check",
-        detail: item.detail || item.message || item.result || "",
-        state: state === "passed" ? "done" : state,
-    };
+    return { title: item.title || item.name || item.check || item.error_code || "Diagnostic check", detail: item.detail || item.message || item.result || "", state: state === "passed" || state === "working" ? "done" : state };
 }
 
 function renderChecklist(items) {
     const timeline = $("timeline");
     timeline.replaceChildren();
-    items.map(checklistItem).forEach((item) => {
+    const checks = items.map(normalizeCheck);
+    checks.forEach((check) => {
         const row = document.createElement("div");
-        row.className = `step ${item.state}`;
-        const icon = document.createElement("i");
-        icon.textContent = item.state === "done" ? "✓" : item.state === "error" ? "✗" : "•";
-        const content = document.createElement("div");
-        const title = document.createElement("b");
-        title.textContent = item.title;
-        const detail = document.createElement("p");
-        detail.textContent = item.detail;
-        content.append(title, detail);
-        row.append(icon, content);
+        row.className = `check ${check.state}`;
+        const icon = document.createElement("span");
+        icon.textContent = check.state === "done" ? "✓" : check.state === "error" || check.state === "blocked" ? "✕" : "•";
+        const copy = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = check.title;
+        const detail = document.createElement("small");
+        detail.textContent = check.detail;
+        copy.append(title, detail);
+        row.append(icon, copy);
         timeline.appendChild(row);
     });
-    $("diagnosis").classList.toggle("hidden", items.length === 0);
-    $("progress").textContent = `${items.filter((item) => checklistItem(item).state === "done").length} / ${items.length}`;
+    if (!checks.length) { const empty = document.createElement("div"); empty.className = "timeline-empty"; empty.textContent = "Diagnostic checks will populate here."; timeline.appendChild(empty); }
+    $("progress").textContent = `${checks.filter((check) => check.state === "done").length} / ${checks.length}`;
+}
+
+function readable(value) { return String(value || "").replaceAll("_", " "); }
+
+function renderEscalation(card) {
+    const escalation = $("escalation");
+    escalation.classList.toggle("hidden", !card);
+    if (!card) return;
+    $("ticketId").textContent = card.ticket_id || "Pending";
+    $("routingTeam").textContent = card.routing_team || "IT Helpdesk";
+    $("diagnosticCount").textContent = `${(card.diagnostics_run || []).length} checks`;
+    $("escalationSummary").textContent = card.reason || card.symptom || "The captured evidence has been routed to support.";
 }
 
 function renderState(uiState) {
-    const intent = uiState.issue || uiState.current_intent || "Waiting for your issue";
-    $("title").textContent = intent.replaceAll("_", " ");
-    $("subtitle").textContent = uiState.stage ? `Support stage: ${uiState.stage}` : "Voice support is ready.";
+    const intent = uiState.issue || uiState.current_intent;
+    $("title").textContent = intent ? `${readable(intent)} failure` : "Waiting for your issue";
+    $("subtitle").textContent = uiState.stage ? `Support stage: ${readable(uiState.stage)}.` : "Tell us what is happening in your meeting and we'll check it.";
+    $("severity").textContent = uiState.stage === "resolved" ? "RESOLVED" : intent ? "INVESTIGATING" : "READY";
     renderChecklist(uiState.diagnosis_checklist || uiState.diagnosis || []);
-
-    const pendingAction = uiState.pending_action || uiState.recommended_action;
-    $("approval").classList.toggle("hidden", !pendingAction);
-    if (pendingAction) {
-        $("approval").querySelector("h3").textContent = "Recommended action";
-        $("approval").querySelector("p").textContent = String(pendingAction).replaceAll("_", " ");
-    }
-
-    const escalation = uiState.escalation_card;
-    $("escalation").classList.toggle("hidden", !escalation);
-    if (escalation) {
-        $("escalation h3").textContent = `Ticket ${escalation.ticket_id || "created"}`;
-        $("escalation p").textContent = escalation.reason || escalation.symptom || "Diagnostics have been routed to support.";
-        $("escalation .evidence").innerHTML = "";
-        [
-            ["Routing", escalation.routing_team || "IT Helpdesk"],
-            ["Diagnostics", (escalation.diagnostics_run || []).length],
-            ["Actions", (escalation.actions_attempted || []).length],
-        ].forEach(([label, value]) => {
-            const tag = document.createElement("span");
-            tag.textContent = `${label}: ${value}`;
-            $("escalation .evidence").appendChild(tag);
-        });
-        $("ticket").classList.add("hidden");
-    }
+    const action = uiState.pending_action || uiState.recommended_action;
+    $("actionTitle").textContent = action ? readable(action) : "We'll recommend the next step here.";
+    $("actionDescription").textContent = action ? "This change needs your approval before we test it." : "Run a diagnostic to receive a plain-language action.";
+    $("approve").disabled = !action;
+    $("verify").classList.toggle("hidden", uiState.stage !== "verifying");
+    renderEscalation(uiState.escalation_card || null);
 }
 
 async function sendMessage(text, approved = false) {
-    const response = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, user_text: text, user_approved: approved }),
-    });
-    if (!response.ok) throw new Error(`Agent API returned ${response.status}`);
-    const data = await response.json();
-    addMessage("agent", data.reply_text);
-    renderState(data.ui_state || {});
-    speak(data.reply_text);
-    return data;
+    if (!text || isSubmitting) return null;
+    isSubmitting = true;
+    try {
+        const response = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: sessionId, user_text: text, user_approved: approved }) });
+        if (!response.ok) throw new Error(`Agent API returned ${response.status}`);
+        const data = await response.json();
+        addTranscript("agent", data.reply_text);
+        renderState(data.ui_state || {});
+        speak(data.reply_text);
+        return data;
+    } finally {
+        isSubmitting = false;
+    }
 }
 
-function setListening(listening) {
-    $("mic").classList.toggle("listening", listening);
-    $("voiceStatus").textContent = listening ? "Listening..." : "Tap to speak to support";
+function setListening(listening) { $("mic").classList.toggle("listening", listening); $("voiceStatus").textContent = listening ? "Listening... describe your meeting issue." : "Tap the microphone and describe what went wrong."; }
+function updateLiveTranscript(text) {
+    const transcript = $("transcript");
+    const empty = transcript.querySelector(".empty-transcript");
+    if (empty) empty.remove();
+    if (!liveTranscriptRow) {
+        liveTranscriptRow = document.createElement("div");
+        liveTranscriptRow.className = "transcript-line user";
+        const label = document.createElement("span");
+        label.className = "transcript-label";
+        label.textContent = "YOU";
+        const quote = document.createElement("p");
+        liveTranscriptRow.append(label, quote);
+        transcript.appendChild(liveTranscriptRow);
+    }
+    liveTranscriptRow.querySelector("p").textContent = `“${text}”`;
+}
+
+async function submitVoiceMessage() {
+    clearTimeout(silenceTimer);
+    const text = finalVoiceText.trim();
+    finalVoiceText = "";
+    if (!text || isSubmitting) return;
+    $("voiceStatus").textContent = "Checking your meeting setup...";
+    try {
+        const response = await sendMessage(text);
+        if (response) $("voiceStatus").textContent = "Response ready. Tap to speak again.";
+    } catch {
+        $("voiceStatus").textContent = "Could not reach support.";
+    }
 }
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
-    recognition.onstart = () => setListening(true);
-    recognition.onerror = (event) => {
+    recognition.onstart = () => {
+        finalVoiceText = "";
+        speechEnded = false;
+        stopRequested = false;
+        liveTranscriptRow = null;
+        setListening(true);
+    };
+    recognition.onerror = (event) => { setListening(false); $("voiceStatus").textContent = event.error === "not-allowed" ? "Microphone permission is blocked." : "Voice input failed. Try typing instead."; };
+    recognition.onspeechend = () => { speechEnded = true; };
+    recognition.onend = () => {
         setListening(false);
-        $("voiceStatus").textContent = event.error === "not-allowed" ? "Microphone permission is blocked" : "Voice input failed";
+        if (speechEnded || stopRequested) submitVoiceMessage();
     };
-    recognition.onend = () => setListening(false);
-    recognition.onresult = async (event) => {
-        const text = event.results[0][0].transcript.trim();
-        if (!text) return;
-        lastUserText = text;
-        addMessage("user", text);
-        $("voiceStatus").textContent = "Thinking...";
-        try {
-            await sendMessage(text);
-            $("voiceStatus").textContent = "Response ready. Tap to speak again";
-        } catch (error) {
-            $("voiceStatus").textContent = "Could not reach support";
-            addMessage("agent", error.message);
+    recognition.onresult = (event) => {
+        let interimText = "";
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            const result = event.results[index];
+            const text = result[0].transcript.trim();
+            if (!text) continue;
+            if (result.isFinal) {
+                finalVoiceText = `${finalVoiceText} ${text}`.trim();
+                clearTimeout(silenceTimer);
+                silenceTimer = setTimeout(submitVoiceMessage, 1500);
+            } else {
+                interimText = `${interimText} ${text}`.trim();
+            }
         }
+        updateLiveTranscript(`${finalVoiceText} ${interimText}`.trim());
     };
-} else {
-    $("fallback").classList.remove("hidden");
-    $("voiceStatus").textContent = "Voice input is unavailable in this browser";
-}
+} else { $("voiceStatus").textContent = "Voice input is unavailable. Type your issue below."; }
 
-$("mic").addEventListener("click", () => {
-    if (!recognition) return;
-    if ($("mic").classList.contains("listening")) recognition.stop();
-    else recognition.start();
-});
-
-$("approve").addEventListener("click", async () => {
-    if (!lastUserText) return;
-    $("approval").classList.add("hidden");
-    $("verify").classList.remove("hidden");
-    try {
-        await sendMessage(lastUserText, true);
-    } catch (error) {
-        addMessage("agent", error.message);
-    } finally {
-        $("verify").classList.add("hidden");
-    }
-});
-
-async function submitText(text) {
-    if (!text.trim()) return;
-    lastUserText = text.trim();
-    addMessage("user", lastUserText);
-    try {
-        await sendMessage(lastUserText);
-    } catch (error) {
-        addMessage("agent", error.message);
-    }
-}
-
-$("send").addEventListener("click", () => {
-    const input = $("message");
-    submitText(input.value);
-    input.value = "";
-});
-
-$("updateIssue").addEventListener("click", () => {
-    const input = $("issueInput");
-    submitText(input.value);
-    input.value = "";
-});
-
-$("new").addEventListener("click", () => window.location.reload());
+$("mic").addEventListener("click", () => { if (!recognition) return; if ($("mic").classList.contains("listening")) { stopRequested = true; recognition.stop(); } else if (!isSubmitting) recognition.start(); });
+$("approve").addEventListener("click", async () => { if ($("approve").disabled) return; $("approve").disabled = true; try { const response = await sendMessage("Approve", true); if (!response) $("approve").disabled = false; } catch { $("voiceStatus").textContent = "Could not reach support."; $("approve").disabled = false; } });
+$("send").addEventListener("click", async () => { const input = $("message"); const text = input.value.trim(); if (!text || isSubmitting) return; input.value = ""; addTranscript("user", text); try { await sendMessage(text); } catch { $("voiceStatus").textContent = "Could not reach support."; } });
+$("message").addEventListener("keydown", (event) => { if (event.key === "Enter") $("send").click(); });
+$("new").addEventListener("click", () => { sessionStorage.removeItem("meetassist-session"); window.location.reload(); });

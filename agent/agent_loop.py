@@ -13,6 +13,7 @@ from azure.ai.projects import AIProjectClient
 from azure.core.exceptions import HttpResponseError
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from dotenv import load_dotenv
+from openai import BadRequestError
 
 from real_diagnostics import (
     check_camera,
@@ -45,6 +46,17 @@ if "/api/projects/" not in PROJECT_ENDPOINT:
         f"{os.environ.get('FOUNDRY_PROJECT_NAME', 'meeting-support-brain')}"
     )
 POLL_INTERVAL_SECONDS = 1
+SYSTEM_PROMPT = (
+    'CRITICAL: You are an automated Tier-1 IT diagnostic agent. You have direct '
+    'access to system diagnostic tools. NEVER ask the user to perform manual '
+    'troubleshooting steps. NEVER ask the user what OS they are on. If a user '
+    'reports an audio/microphone issue, you MUST immediately execute the '
+    '"check_mic" function in the background. Your ONLY job is to run tools, '
+    'read the JSON output, and tell the user what you found in 1 to 2 short '
+    'sentences. Do not retrieve or read any RAG or manual knowledge during '
+    'initial triage. Only consult it if check_mic returns an error requiring '
+    'human intervention.'
+)
 
 TOOL_NAMES = {
     "check_mic",
@@ -306,6 +318,13 @@ def run_diagnostic(tool_name: str, state: dict) -> dict:
 
 def fallback_diagnostic_tool(user_text: str) -> str | None:
     normalized = user_text.lower()
+    if (
+        "nobody can hear me" in normalized
+        or "no one can hear me" in normalized
+        or "can't hear me" in normalized
+        or "cannot hear me" in normalized
+    ):
+        return "check_mic"
     if "camera" in normalized or "webcam" in normalized:
         return "check_camera"
     if "microphone" in normalized or "mic" in normalized:
@@ -315,6 +334,15 @@ def fallback_diagnostic_tool(user_text: str) -> str | None:
     if "internet" in normalized or "wifi" in normalized or "connection" in normalized:
         return "check_connectivity"
     return None
+
+
+def enforce_voice_brevity(text: str) -> str:
+    """Return a concise spoken response with no list formatting."""
+    cleaned = re.sub(r"【.*?】", "", text or "")
+    cleaned = re.sub(r"(?m)^\s*(?:[-*•]|\d+[.)])\s*", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+    return " ".join(sentences[:2]).strip()
 
 
 def create_escalation(
@@ -533,8 +561,10 @@ def execute_response_tool(
 
     if tool_name in FIX_TO_DIAGNOSTIC:
         if not user_approved:
+            state["stage"] = "approval_required"
+            state["recommended_action"] = action_for_tool(tool_name)
             return {
-                "status": "blocked",
+                "status": "approval_required",
                 "error_code": "approval_required",
                 "message": "User approval is required before attempting a repair.",
             }
@@ -566,16 +596,10 @@ def execute_response_tool(
     state["stage"] = "approval_required"
     state["recommended_action"] = action_name
     if not user_approved:
-        ticket = create_escalation(
-            state,
-            state.get("current_intent") or "meeting_support",
-            "user_declined_action",
-            actions,
-        )
         return {
-            "status": "blocked",
-            "error_code": "user_declined_action",
-            "ticket_id": ticket["ticket_id"],
+            "status": "approval_required",
+            "error_code": "approval_required",
+            "message": "User approval is required before attempting a repair.",
         }
 
     state["stage"] = "acting"
@@ -607,6 +631,50 @@ def execute_response_tool(
         state["stage"] = "resolved"
         state["recommended_action"] = None
     return {"action": action_result, "verification": verification}
+
+
+def approved_action(
+    action_name: str,
+    session_id: str,
+    state: dict,
+    actions: list[dict],
+) -> dict:
+    """Apply an approved action, verify it, and escalate if it still fails."""
+    state["stage"] = "acting"
+    action_result = request_backend(
+        "POST",
+        "/api/actions",
+        json={
+            "session_id": session_id,
+            "action_name": action_name,
+            "user_approved": True,
+        },
+    )
+    actions.append(action_result)
+    if action_result.get("status") != "working":
+        create_escalation(
+            state,
+            state.get("current_intent") or action_name,
+            action_result.get("error_code", "action_failed"),
+            actions,
+        )
+        return {"action": action_result}
+
+    state["stage"] = "verifying"
+    verification_tool = tool_for_action(action_name)
+    verification = run_diagnostic(verification_tool, state)
+    result = {"action": action_result, "verification": verification}
+    if verification.get("status") == "working":
+        state["stage"] = "resolved"
+        state["recommended_action"] = None
+    else:
+        create_escalation(
+            state,
+            state.get("current_intent") or verification_tool,
+            verification.get("error_code", "verification_failed"),
+            actions,
+        )
+    return result
 
 
 def complete_response(
@@ -646,6 +714,8 @@ def complete_response(
             conversation=conversation_id,
             previous_response_id=response.id,
             input=outputs,
+            tools=diagnostic_tools,
+            tool_choice="auto",
         )
 
 
@@ -704,10 +774,55 @@ def run_agent_turn(
         }
         SESSIONS[session_id] = session
 
-    response = session["openai_client"].responses.create(
-        conversation=session["conversation_id"],
-        input=user_text,
+    if user_approved:
+        action_name = session["state"].get("recommended_action")
+        if not action_name:
+            current_intent = session["state"].get("current_intent")
+            if current_intent:
+                action_name = action_for_tool(f"check_{current_intent}")
+        if not action_name:
+            raise ValueError("No pending action is available for approval")
+        action_result = approved_action(
+            action_name,
+            session_id,
+            session["state"],
+            session["actions"],
+        )
+        if session["state"].get("stage") == "escalated":
+            reply_text = "The fix didn't work, so I have escalated this and opened a high-priority ticket with all our diagnostic data."
+        else:
+            reply_text = "I applied the fix and verified your hardware is now working."
+        return (
+            reply_text,
+            ui_state_for(session["state"]),
+        )
+
+    tool_name = fallback_diagnostic_tool(user_text)
+    tool_choice = (
+        {"type": "function", "name": tool_name}
+        if tool_name
+        else "auto"
     )
+
+    response_arguments = {
+        "conversation": session["conversation_id"],
+        "instructions": SYSTEM_PROMPT,
+        "input": user_text,
+        "tools": diagnostic_tools,
+        "tool_choice": tool_choice,
+    }
+    try:
+        response = session["openai_client"].responses.create(**response_arguments)
+    except BadRequestError as error:
+        if "Not allowed when agent is specified" not in str(error):
+            raise
+        response = session["openai_client"].responses.create(
+            conversation=session["conversation_id"],
+            instructions=SYSTEM_PROMPT,
+            input=user_text,
+            tools=diagnostic_tools,
+            tool_choice=tool_choice,
+        )
     response = complete_response(
         session["openai_client"],
         session["conversation_id"],
@@ -717,9 +832,5 @@ def run_agent_turn(
         session["actions"],
         user_approved,
     )
-    if not session["state"]["diagnosis"]:
-        tool_name = fallback_diagnostic_tool(user_text)
-        if tool_name:
-            run_diagnostic(tool_name, session["state"])
-    reply_text = re.sub(r"【.*?】", "", response.output_text or "").strip()
+    reply_text = enforce_voice_brevity(response.output_text)
     return reply_text, ui_state_for(session["state"])

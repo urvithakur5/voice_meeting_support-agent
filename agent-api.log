@@ -1,0 +1,10 @@
+[startup] Environment configuration: FOUNDRY_PROJECT_ENDPOINT=detected, FOUNDRY_AGENT_NAME=detected, AZURE_CLIENT_ID=missing
+[startup] Azure credential: DefaultAzureCredential chain
+[tool] check_camera
+INFO:     127.0.0.1:62547 - "POST /agent/message HTTP/1.1" 200 OK
+[startup] Environment configuration: FOUNDRY_PROJECT_ENDPOINT=detected, FOUNDRY_AGENT_NAME=detected, AZURE_CLIENT_ID=missing
+[startup] Azure credential: DefaultAzureCredential chain
+[tool] check_mic
+INFO:     127.0.0.1:49155 - "POST /agent/message HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49155 - "POST /agent/message HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49230 - "OPTIONS /agent/message HTTP/1.1" 200 OK
