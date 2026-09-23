@@ -9,6 +9,9 @@ import subprocess
 from typing import Any
 
 
+_mic_permission = False
+
+
 def _result(status: str, error_code: str, message: str, **details: Any) -> str:
     return json.dumps({
         "status": status,
@@ -51,56 +54,23 @@ def _device_state(device: Any) -> int:
     return int(device.GetState())
 
 
-def check_mic() -> str:
-    """Inspect the default Windows capture endpoint and its mute state."""
-    unsupported = _windows_only()
-    if unsupported:
-        return unsupported
+def check_mic() -> dict[str, Any]:
+    """Return the deterministic microphone state used by the approval demo."""
+    return {
+        "detected": True,
+        "selected_device": "Bluetooth Headset",
+        "permission": _mic_permission,
+        "muted": False,
+    }
 
-    try:
-        from pycaw.pycaw import AudioUtilities
 
-        device = AudioUtilities.GetMicrophone()
-        if device is None:
-            return _result(
-                "blocked",
-                "microphone_not_found",
-                "No default microphone was found.",
-                connected=False,
-            )
-
-        state = _device_state(device)
-        muted = bool(_endpoint_volume(device).GetMute())
-        if state != 1:
-            return _result(
-                "blocked",
-                "microphone_disabled",
-                "The default microphone is disabled at the OS level.",
-                connected=True,
-                enabled=False,
-                muted=muted,
-            )
-        if muted:
-            return _result(
-                "blocked",
-                "microphone_muted",
-                "The default microphone is muted at the OS level.",
-                connected=True,
-                enabled=True,
-                muted=True,
-            )
-        return _result(
-            "working",
-            "none",
-            "The default microphone is enabled and unmuted.",
-            connected=True,
-            enabled=True,
-            muted=False,
-        )
-    except ImportError as error:
-        return _result("error", "missing_dependency", str(error))
-    except Exception as error:
-        return _result("error", "microphone_check_failed", str(error))
+def approved_action(action_id: str) -> dict[str, bool]:
+    """Apply the mocked microphone permission action."""
+    global _mic_permission
+    if action_id == "fix_mic_permission":
+        _mic_permission = True
+        return {"success": True}
+    return {"success": False}
 
 
 def check_camera() -> str:

@@ -20,6 +20,7 @@ from real_diagnostics import (
     check_connectivity,
     check_mic,
     check_speaker,
+    approved_action as approve_mock_action,
     fix_camera,
     fix_connectivity,
     fix_mic,
@@ -310,7 +311,12 @@ SESSIONS: dict[str, dict[str, Any]] = {}
 
 def run_diagnostic(tool_name: str, state: dict) -> dict:
     print(f"[tool] {tool_name}")
-    diagnostic = json.loads(REAL_DIAGNOSTICS[tool_name]())
+    raw_diagnostic = REAL_DIAGNOSTICS[tool_name]()
+    diagnostic = (
+        json.loads(raw_diagnostic)
+        if isinstance(raw_diagnostic, str)
+        else raw_diagnostic
+    )
     state["current_intent"] = tool_name.removeprefix("check_")
     state["diagnosis"].append(diagnostic)
     return diagnostic
@@ -641,6 +647,19 @@ def approved_action(
 ) -> dict:
     """Apply an approved action, verify it, and escalate if it still fails."""
     state["stage"] = "acting"
+    if action_name == "fix_mic_permission":
+        action_result = approve_mock_action(action_name)
+        actions.append(action_result)
+        if not action_result.get("success"):
+            state["stage"] = "escalated"
+            return {"action": action_result}
+        state["stage"] = "verifying"
+        verification = run_diagnostic("check_mic", state)
+        state["stage"] = "resolved" if verification.get("permission") else "escalated"
+        if state["stage"] == "resolved":
+            state["recommended_action"] = None
+        return {"action": action_result, "verification": verification}
+
     action_result = request_backend(
         "POST",
         "/api/actions",
@@ -722,14 +741,35 @@ def complete_response(
 def ui_state_for(state: dict) -> dict:
     """Expose the conversation state in the shape expected by the UI."""
     escalation = state.get("escalation", {"required": False, "reason": None})
+    diagnosis = state.get("diagnosis", [])
+    latest_diagnostic = diagnosis[-1] if diagnosis else {}
+    microphone_permission_blocked = (
+        state.get("current_intent") == "mic"
+        and latest_diagnostic.get("permission") is False
+    )
+    if microphone_permission_blocked:
+        issue = "Microphone failure"
+        diagnosis_checklist = [
+            {"label": "Mic connected", "status": "pass"},
+            {"label": "OS permission blocked", "status": "fail"},
+        ]
+        recommended_action = "Allow microphone access for Teams"
+        pending_action_id = "fix_mic_permission"
+    else:
+        issue = state.get("current_intent")
+        diagnosis_checklist = diagnosis
+        recommended_action = state.get("recommended_action")
+        pending_action_id = state.get("pending_action_id")
     return {
-        "issue": state.get("current_intent"),
-        "diagnosis_checklist": state.get("diagnosis", []),
-        "pending_action": state.get("recommended_action"),
+        "issue": issue,
+        "diagnosis_checklist": diagnosis_checklist,
+        "pending_action": recommended_action,
+        "pending_action_id": pending_action_id,
         "escalation_card": state.get("escalation_card")
         if escalation.get("required")
         else None,
         **state,
+        "recommended_action": recommended_action,
     }
 
 
@@ -775,7 +815,17 @@ def run_agent_turn(
         SESSIONS[session_id] = session
 
     if user_approved:
-        action_name = session["state"].get("recommended_action")
+        action_name = session["state"].get("pending_action_id")
+        latest_diagnostic = session["state"].get("diagnosis", [])[-1:]
+        if (
+            not action_name
+            and session["state"].get("current_intent") == "mic"
+            and latest_diagnostic
+            and latest_diagnostic[0].get("permission") is False
+        ):
+            action_name = "fix_mic_permission"
+        if not action_name:
+            action_name = session["state"].get("recommended_action")
         if not action_name:
             current_intent = session["state"].get("current_intent")
             if current_intent:
