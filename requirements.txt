@@ -8,7 +8,7 @@ python-dotenv==1.2.3
 azure-ai-inference
 azure-cognitiveservices-speech
 azure-core
-azure-ai-projects==1.0.0
+azure-ai-projects>=2.3.0
 azure-identity
 annotated-doc==0.0.5
 annotated-types==0.8.0

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import uuid
 from typing import Any
 
 import requests
 from azure.ai.projects import AIProjectClient
-from azure.ai.agents.models import MessageRole, ToolOutput
+from azure.core.exceptions import HttpResponseError
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from dotenv import load_dotenv
 
@@ -24,7 +25,12 @@ PROJECT_ENDPOINT = (
     or os.environ.get("FOUNDRY_ENDPOINT")
     or os.environ["FOUNDRY_MODEL_ENDPOINT"]
 )
-AGENT_ID = os.environ["FOUNDRY_AGENT_ID"]
+AGENT_NAME = os.environ.get("FOUNDRY_AGENT_NAME", "voice-it-helpdesk-agent")
+if "/api/projects/" not in PROJECT_ENDPOINT:
+    PROJECT_ENDPOINT = (
+        f"{PROJECT_ENDPOINT}/api/projects/"
+        f"{os.environ.get('FOUNDRY_PROJECT_NAME', 'meeting-support-brain')}"
+    )
 POLL_INTERVAL_SECONDS = 1
 
 TOOL_NAMES = {
@@ -39,7 +45,7 @@ def print_environment_diagnostic() -> None:
     """Report configuration presence without exposing credentials or values."""
     checks = {
         "FOUNDRY_PROJECT_ENDPOINT": bool(os.environ.get("FOUNDRY_PROJECT_ENDPOINT")),
-        "FOUNDRY_AGENT_ID": bool(os.environ.get("FOUNDRY_AGENT_ID")),
+        "FOUNDRY_AGENT_NAME": bool(os.environ.get("FOUNDRY_AGENT_NAME")),
         "AZURE_CLIENT_ID": bool(os.environ.get("AZURE_CLIENT_ID")),
     }
     summary = ", ".join(
@@ -128,22 +134,8 @@ def extract_function_call(tool_call: Any) -> tuple[str, dict]:
     return function.name, json.loads(arguments)
 
 
-def tool_result(tool_call_id: str, output: Any) -> ToolOutput:
-    return ToolOutput(
-        tool_call_id=tool_call_id,
-        output=json.dumps(output),
-    )
-
-
-def get_assistant_text(client: AIProjectClient, thread_id: str, run_id: str) -> str:
-    """Read the newest assistant message from the completed run."""
-    message = client.agents.messages.get_last_message_text_by_role(
-        thread_id=thread_id,
-        role=MessageRole.ASSISTANT,
-    )
-    if message is None:
-        return ""
-    return getattr(message, "value", str(message))
+def tool_result(tool_call_id: str, output: Any) -> dict:
+    return {"tool_call_id": tool_call_id, "output": json.dumps(output)}
 
 
 def create_escalation(
@@ -172,7 +164,7 @@ def create_escalation(
 
 
 def handle_requires_action(
-    client: AIProjectClient,
+    client: Any,
     run: Any,
     thread_id: str,
     session_id: str,
@@ -181,7 +173,7 @@ def handle_requires_action(
 ) -> Any:
     """Execute read-only tools and gate every write action before POSTing."""
     required = run.required_action.submit_tool_outputs
-    outputs: list[ToolOutput] = []
+    outputs: list[Any] = []
 
     for tool_call in required.tool_calls:
         tool_name, arguments = extract_function_call(tool_call)
@@ -289,7 +281,7 @@ def handle_requires_action(
 
 
 def process_run(
-    client: AIProjectClient,
+    client: Any,
     thread_id: str,
     run: Any,
     session_id: str,
@@ -321,17 +313,131 @@ def process_run(
     return run
 
 
+def execute_response_tool(
+    tool_name: str,
+    arguments: dict,
+    session_id: str,
+    state: dict,
+    actions: list[dict],
+) -> dict:
+    if tool_name in TOOL_NAMES:
+        state["current_intent"] = tool_name.removeprefix("check_")
+        diagnostic = request_backend("GET", f"/api/{tool_name}")
+        state["diagnosis"].append(diagnostic)
+        return diagnostic
+
+    if tool_name != "execute_action":
+        return {"status": "error", "error_code": "unsupported_tool"}
+
+    action_name = arguments.get("action_name") or "fix_microphone_permissions"
+    state["stage"] = "approval_required"
+    state["recommended_action"] = action_name
+    print(
+        "Agent: I need your approval before changing a meeting setting. "
+        "Please answer yes or no."
+    )
+    approval = input("You: ").strip()
+    if is_decline(approval) or not is_approval(approval):
+        ticket = create_escalation(
+            state,
+            state.get("current_intent") or "meeting_support",
+            "user_declined_action",
+            actions,
+        )
+        return {
+            "status": "blocked",
+            "error_code": "user_declined_action",
+            "ticket_id": ticket["ticket_id"],
+        }
+
+    state["stage"] = "acting"
+    action_result = request_backend(
+        "POST",
+        "/api/actions",
+        json={
+            "session_id": session_id,
+            "action_name": action_name,
+            "user_approved": True,
+        },
+    )
+    actions.append(action_result)
+    if action_result.get("status") != "working":
+        return action_result
+
+    state["stage"] = "verifying"
+    verification_tool = tool_for_action(action_name)
+    verification = request_backend("GET", f"/api/{verification_tool}")
+    state["diagnosis"].append(verification)
+    if verification.get("status") != "working":
+        create_escalation(
+            state,
+            state.get("current_intent") or verification_tool,
+            verification.get("error_code", "verification_failed"),
+            actions,
+        )
+    else:
+        state["stage"] = "resolved"
+        state["recommended_action"] = None
+    return {"action": action_result, "verification": verification}
+
+
+def complete_response(
+    openai_client: Any,
+    conversation_id: str,
+    response: Any,
+    session_id: str,
+    state: dict,
+    actions: list[dict],
+) -> Any:
+    while True:
+        calls = [
+            item for item in response.output
+            if getattr(item, "type", None) == "function_call"
+        ]
+        if not calls:
+            return response
+        outputs = []
+        for call in calls:
+            result = execute_response_tool(
+                call.name,
+                json.loads(call.arguments or "{}"),
+                session_id,
+                state,
+                actions,
+            )
+            outputs.append(
+                {
+                    "type": "function_call_output",
+                    "call_id": call.call_id,
+                    "output": json.dumps(result),
+                }
+            )
+        response = openai_client.responses.create(
+            conversation=conversation_id,
+            previous_response_id=response.id,
+            input=outputs,
+        )
+
+
 def run_agent() -> None:
     print_environment_diagnostic()
     session_id = str(uuid.uuid4())
     request_backend("POST", "/scenario", json={"id": "MIC-007"})
-
     client = AIProjectClient(
         endpoint=PROJECT_ENDPOINT,
         credential=build_azure_credential(),
     )
-    agent = client.agents.get_agent(AGENT_ID)
-    thread = client.agents.threads.create()
+    try:
+        client.agents.get(AGENT_NAME)
+        openai_client = client.get_openai_client(agent_name=AGENT_NAME)
+        conversation = openai_client.conversations.create()
+    except HttpResponseError as error:
+        client.close()
+        raise RuntimeError(
+            f"Unable to access Foundry agent '{AGENT_NAME}'. Check "
+            "FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_AGENT_NAME."
+        ) from error
+
     state = {
         "current_intent": None,
         "stage": "diagnosing",
@@ -340,46 +446,30 @@ def run_agent() -> None:
         "escalation": {"required": False, "reason": None},
     }
     actions: list[dict] = []
-
     print("Agent: Hello. How can I help with your meeting today?")
     try:
         while True:
             user_input = input("You: ").strip()
             if not user_input:
                 continue
-
-            client.agents.messages.create(
-                thread_id=thread.id,
-                role="user",
-                content=user_input,
+            response = openai_client.responses.create(
+                conversation=conversation.id,
+                input=user_input,
             )
-            run = client.agents.runs.create(
-                thread_id=thread.id,
-                agent_id=agent.id,
-            )
-            run = process_run(
-                client,
-                thread.id,
-                run,
+            response = complete_response(
+                openai_client,
+                conversation.id,
+                response,
                 session_id,
                 state,
                 actions,
             )
-
-            response_text = get_assistant_text(client, thread.id, run.id)
-            if response_text:
-                print(f"Agent: {response_text}")
-
+            raw_text = response.output_text or ""
+            clean_voice_text = re.sub(r"【.*?】", "", raw_text)
+            if clean_voice_text:
+                print(f"Agent: {clean_voice_text}")
             if is_exit_request(user_input):
                 break
-
-            if run.status == "completed" and state["diagnosis"]:
-                latest = state["diagnosis"][-1]
-                if latest.get("status") == "working":
-                    state["stage"] = "resolved"
-                elif latest.get("status") == "blocked":
-                    state["stage"] = "approval_required"
-
     finally:
         client.close()
 
