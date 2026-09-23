@@ -10,6 +10,9 @@ azure-cognitiveservices-speech
 azure-core
 azure-ai-projects>=2.3.0
 azure-identity
+pycaw
+comtypes
+opencv-python
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1

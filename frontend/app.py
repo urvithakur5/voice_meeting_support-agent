@@ -9,7 +9,7 @@ import os
 import azure.cognitiveservices.speech as speechsdk
 from dotenv import load_dotenv
 
-load_dotenv("../voice/.env")
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY")
 SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION")
@@ -26,7 +26,7 @@ recognizer = speechsdk.SpeechRecognizer(
 )
 # Create the Flask application
 app = Flask(__name__)
-BACKEND_URL = "http://127.0.0.1:8000"
+BACKEND_URL = "http://127.0.0.1:5673"
 
 # Predefined IT support scenarios
 # Each scenario contains:
@@ -332,4 +332,4 @@ if __name__ == "__main__":
 
     # debug=True automatically reloads the server
     # when code changes during development
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)

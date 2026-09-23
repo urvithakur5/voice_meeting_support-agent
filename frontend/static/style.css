@@ -341,13 +341,15 @@ h1 {
 
 /* Microphone button */
 .voice button {
-    width: 76px;
+    min-width: 220px;
     height: 76px;
     border: 0;
-    border-radius: 50%;
+    border-radius: 16px;
     background: #5b4ce2;
     color: #fff;
-    font-size: 27px;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: .5px;
     box-shadow: 0 12px 25px #5b4ce240;
 }
 

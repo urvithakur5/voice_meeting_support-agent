@@ -62,7 +62,7 @@ def generate_response(user_text):
  if "microphone" in text or "mic" in text:
     try:
         result = requests.get(
-            "http://127.0.0.1:8000/api/check_mic",
+            "http://127.0.0.1:5673/api/check_mic",
             params={"device": "default"},
             timeout=5
         )

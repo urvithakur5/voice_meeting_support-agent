@@ -273,8 +273,8 @@
 
 
                         <!-- Microphone button -->
-                        <button id="mic">
-                            🎙
+                        <button id="mic" type="button" aria-label="Talk to support">
+                            🎙 TALK TO SUPPORT
                         </button>
 
 
@@ -423,7 +423,7 @@
                             class="primary"
                             id="approve"
                         >
-                            Approve action
+                            Approve &amp; Test
                         </button>
 
                     </div>
@@ -601,7 +601,8 @@
      JAVASCRIPT
      ========================= -->
 
-<script>
+<script src="{{ url_for('static', filename='app.js') }}" defer></script>
+<script type="application/legacy-dashboard-script">
 
 
 // Shortcut function for finding an element by ID
@@ -1069,9 +1070,9 @@ document
         input.value = "";
 
 
-        // Send corrected issue to Flask
+        // Send the issue to Agent Brain on its dedicated port.
         const response = await fetch(
-            "/api/message",
+            "http://localhost:3002/agent/message",
             {
                 method: "POST",
 
@@ -1081,7 +1082,9 @@ document
                 },
 
                 body: JSON.stringify({
-                    text: text
+                    session_id: "MS-2048",
+                    user_text: text,
+                    user_approved: false
                 })
             }
         );
@@ -1091,8 +1094,8 @@ document
         const data = await response.json();
 
 
-        // Show agent's acknowledgement
-        msg("agent", data.message);
+        // Show the response returned by the Agent Brain contract.
+        msg("agent", data.reply_text);
         // Show diagnosis process
 $("diagnosis").classList.remove("hidden");
 

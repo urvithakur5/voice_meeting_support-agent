@@ -51,17 +51,17 @@ pip install -r requirements.txt
 
 ## Run the Backend
 
-python -m uvicorn main:app --reload
+python main.py
 
 The backend will run at:
 
-http://127.0.0.1:8000
+http://127.0.0.1:5673
 
 ## API Documentation
 
 Open the following URL in a browser:
 
-http://127.0.0.1:8000/docs
+http://127.0.0.1:5673/docs
 
 ## API Flow
 

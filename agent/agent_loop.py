@@ -6,7 +6,6 @@ import json
 import os
 import re
 import time
-import uuid
 from typing import Any
 
 import requests
@@ -15,10 +14,24 @@ from azure.core.exceptions import HttpResponseError
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from dotenv import load_dotenv
 
+from real_diagnostics import (
+    check_camera,
+    check_connectivity,
+    check_mic,
+    check_speaker,
+    fix_camera,
+    fix_connectivity,
+    fix_mic,
+    fix_speaker,
+)
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 BACKEND_URL = (
-    os.environ.get("BACKEND_URL") or "http://localhost:8000"
+    os.environ.get("BACKEND_URL") or "http://localhost:5673"
+).rstrip("/")
+TICKET_BACKEND_URL = (
+    os.environ.get("TICKET_BACKEND_URL") or "http://localhost:8002"
 ).rstrip("/")
 PROJECT_ENDPOINT = (
     os.environ.get("FOUNDRY_PROJECT_ENDPOINT")
@@ -39,6 +52,123 @@ TOOL_NAMES = {
     "check_speaker",
     "check_connectivity",
 }
+
+FIX_TO_DIAGNOSTIC = {
+    "fix_mic": "check_mic",
+    "fix_camera": "check_camera",
+    "fix_speaker": "check_speaker",
+    "fix_connectivity": "check_connectivity",
+}
+
+diagnostic_tools = [
+    {
+        "type": "function",
+        "name": "check_mic",
+        "description": "Check whether the default Windows microphone is connected, enabled, and muted.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "check_camera",
+        "description": "Check whether a webcam is connected and available for use.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "check_speaker",
+        "description": "Check the default Windows output device volume and mute status.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "check_connectivity",
+        "description": "Ping 8.8.8.8 and report internet availability and packet loss.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "fix_mic",
+        "description": "Attempt to repair the microphone by restarting its service.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "fix_camera",
+        "description": "Attempt to repair the camera by restarting its service.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "fix_speaker",
+        "description": "Attempt to repair the speaker by restarting its service.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "fix_connectivity",
+        "description": "Attempt to repair connectivity by restarting its service.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "escalate_ticket",
+        "description": "Create an IT helpdesk ticket when the issue cannot be resolved.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "symptom": {"type": "string"},
+                "diagnostics_run": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                },
+                "actions_attempted": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                },
+                "routing_team": {"type": "string"},
+            },
+            "required": [
+                "symptom",
+                "diagnostics_run",
+                "actions_attempted",
+                "routing_team",
+            ],
+            "additionalProperties": False,
+        },
+    },
+]
 
 
 def print_environment_diagnostic() -> None:
@@ -80,6 +210,17 @@ def request_backend(method: str, path: str, **kwargs: Any) -> dict:
         f"{BACKEND_URL}{path}",
         timeout=15,
         **kwargs,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def request_ticket(payload: dict) -> dict:
+    """Send an escalation ticket to the ticketing backend."""
+    response = requests.post(
+        f"{TICKET_BACKEND_URL}/api/tickets",
+        json=payload,
+        timeout=15,
     )
     response.raise_for_status()
     return response.json()
@@ -138,27 +279,98 @@ def tool_result(tool_call_id: str, output: Any) -> dict:
     return {"tool_call_id": tool_call_id, "output": json.dumps(output)}
 
 
+REAL_DIAGNOSTICS = {
+    "check_mic": check_mic,
+    "check_camera": check_camera,
+    "check_speaker": check_speaker,
+    "check_connectivity": check_connectivity,
+}
+
+REAL_FIXES = {
+    "fix_mic": fix_mic,
+    "fix_camera": fix_camera,
+    "fix_speaker": fix_speaker,
+    "fix_connectivity": fix_connectivity,
+}
+
+SESSIONS: dict[str, dict[str, Any]] = {}
+
+
+def run_diagnostic(tool_name: str, state: dict) -> dict:
+    print(f"[tool] {tool_name}")
+    diagnostic = json.loads(REAL_DIAGNOSTICS[tool_name]())
+    state["current_intent"] = tool_name.removeprefix("check_")
+    state["diagnosis"].append(diagnostic)
+    return diagnostic
+
+
+def fallback_diagnostic_tool(user_text: str) -> str | None:
+    normalized = user_text.lower()
+    if "camera" in normalized or "webcam" in normalized:
+        return "check_camera"
+    if "microphone" in normalized or "mic" in normalized:
+        return "check_mic"
+    if "speaker" in normalized or "audio" in normalized:
+        return "check_speaker"
+    if "internet" in normalized or "wifi" in normalized or "connection" in normalized:
+        return "check_connectivity"
+    return None
+
+
 def create_escalation(
     state: dict,
     issue: str,
     result: str,
     actions: list[dict],
 ) -> dict:
-    ticket = request_backend(
-        "POST",
-        "/api/tickets",
-        json={
-            "issue": issue,
+    ticket = request_ticket(
+        {
+            "symptom": issue,
             "diagnostics_run": state["diagnosis"],
             "actions_attempted": actions,
-            "result": result,
-        },
+            "routing_team": "IT Helpdesk",
+        }
     )
     state["stage"] = "escalated"
     state["escalation"] = {
         "required": True,
         "reason": result,
         "ticket_id": ticket["ticket_id"],
+    }
+    state["escalation_card"] = {
+        **ticket,
+        "symptom": issue,
+        "diagnostics_run": state["diagnosis"],
+        "actions_attempted": actions,
+        "routing_team": "IT Helpdesk",
+        "reason": result,
+    }
+    return ticket
+
+
+def escalate_ticket(
+    arguments: dict,
+    state: dict,
+    actions: list[dict],
+) -> dict:
+    """Create a ticket from the LLM's explicit escalation request."""
+    ticket = request_ticket(
+        {
+            "symptom": arguments["symptom"],
+            "diagnostics_run": arguments["diagnostics_run"],
+            "actions_attempted": arguments["actions_attempted"],
+            "routing_team": arguments["routing_team"],
+        }
+    )
+    state["stage"] = "escalated"
+    state["escalation"] = {
+        "required": True,
+        "reason": "llm_escalation",
+        "ticket_id": ticket.get("ticket_id"),
+    }
+    state["escalation_card"] = {
+        **ticket,
+        **arguments,
     }
     return ticket
 
@@ -179,12 +391,7 @@ def handle_requires_action(
         tool_name, arguments = extract_function_call(tool_call)
 
         if tool_name in TOOL_NAMES:
-            state["current_intent"] = tool_name.removeprefix("check_")
-            diagnostic = request_backend(
-                "GET",
-                f"/api/{tool_name}",
-            )
-            state["diagnosis"].append(diagnostic)
+            diagnostic = run_diagnostic(tool_name, state)
             outputs.append(tool_result(tool_call.id, diagnostic))
             continue
 
@@ -319,12 +526,38 @@ def execute_response_tool(
     session_id: str,
     state: dict,
     actions: list[dict],
+    user_approved: bool,
 ) -> dict:
     if tool_name in TOOL_NAMES:
-        state["current_intent"] = tool_name.removeprefix("check_")
-        diagnostic = request_backend("GET", f"/api/{tool_name}")
-        state["diagnosis"].append(diagnostic)
-        return diagnostic
+        return run_diagnostic(tool_name, state)
+
+    if tool_name in FIX_TO_DIAGNOSTIC:
+        if not user_approved:
+            return {
+                "status": "blocked",
+                "error_code": "approval_required",
+                "message": "User approval is required before attempting a repair.",
+            }
+        state["stage"] = "acting"
+        action_result = json.loads(REAL_FIXES[tool_name]())
+        actions.append(action_result)
+        state["stage"] = "verifying"
+        verification = run_diagnostic(FIX_TO_DIAGNOSTIC[tool_name], state)
+        result = {"action": action_result, "verification": verification}
+        if verification.get("status") == "working":
+            state["stage"] = "resolved"
+            state["recommended_action"] = None
+        else:
+            create_escalation(
+                state,
+                state.get("current_intent") or FIX_TO_DIAGNOSTIC[tool_name],
+                verification.get("error_code", "verification_failed"),
+                actions,
+            )
+        return result
+
+    if tool_name == "escalate_ticket":
+        return escalate_ticket(arguments, state, actions)
 
     if tool_name != "execute_action":
         return {"status": "error", "error_code": "unsupported_tool"}
@@ -332,12 +565,7 @@ def execute_response_tool(
     action_name = arguments.get("action_name") or "fix_microphone_permissions"
     state["stage"] = "approval_required"
     state["recommended_action"] = action_name
-    print(
-        "Agent: I need your approval before changing a meeting setting. "
-        "Please answer yes or no."
-    )
-    approval = input("You: ").strip()
-    if is_decline(approval) or not is_approval(approval):
+    if not user_approved:
         ticket = create_escalation(
             state,
             state.get("current_intent") or "meeting_support",
@@ -388,6 +616,7 @@ def complete_response(
     session_id: str,
     state: dict,
     actions: list[dict],
+    user_approved: bool,
 ) -> Any:
     while True:
         calls = [
@@ -404,6 +633,7 @@ def complete_response(
                 session_id,
                 state,
                 actions,
+                user_approved,
             )
             outputs.append(
                 {
@@ -419,60 +649,77 @@ def complete_response(
         )
 
 
-def run_agent() -> None:
-    print_environment_diagnostic()
-    session_id = str(uuid.uuid4())
-    request_backend("POST", "/scenario", json={"id": "MIC-007"})
-    client = AIProjectClient(
-        endpoint=PROJECT_ENDPOINT,
-        credential=build_azure_credential(),
-    )
-    try:
-        client.agents.get(AGENT_NAME)
-        openai_client = client.get_openai_client(agent_name=AGENT_NAME)
-        conversation = openai_client.conversations.create()
-    except HttpResponseError as error:
-        client.close()
-        raise RuntimeError(
-            f"Unable to access Foundry agent '{AGENT_NAME}'. Check "
-            "FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_AGENT_NAME."
-        ) from error
-
-    state = {
-        "current_intent": None,
-        "stage": "diagnosing",
-        "diagnosis": [],
-        "recommended_action": None,
-        "escalation": {"required": False, "reason": None},
+def ui_state_for(state: dict) -> dict:
+    """Expose the conversation state in the shape expected by the UI."""
+    escalation = state.get("escalation", {"required": False, "reason": None})
+    return {
+        "issue": state.get("current_intent"),
+        "diagnosis_checklist": state.get("diagnosis", []),
+        "pending_action": state.get("recommended_action"),
+        "escalation_card": state.get("escalation_card")
+        if escalation.get("required")
+        else None,
+        **state,
     }
-    actions: list[dict] = []
-    print("Agent: Hello. How can I help with your meeting today?")
-    try:
-        while True:
-            user_input = input("You: ").strip()
-            if not user_input:
-                continue
-            response = openai_client.responses.create(
-                conversation=conversation.id,
-                input=user_input,
-            )
-            response = complete_response(
-                openai_client,
-                conversation.id,
-                response,
-                session_id,
-                state,
-                actions,
-            )
-            raw_text = response.output_text or ""
-            clean_voice_text = re.sub(r"【.*?】", "", raw_text)
-            if clean_voice_text:
-                print(f"Agent: {clean_voice_text}")
-            if is_exit_request(user_input):
-                break
-    finally:
-        client.close()
 
 
-if __name__ == "__main__":
-    run_agent()
+def run_agent_turn(
+    session_id: str,
+    user_text: str,
+    user_approved: bool,
+) -> tuple[str, dict]:
+    """Process one user message and return the reply plus current UI state."""
+    if not user_text.strip():
+        raise ValueError("user_text must not be empty")
+
+    session = SESSIONS.get(session_id)
+    if session is None:
+        print_environment_diagnostic()
+        client = AIProjectClient(
+            endpoint=PROJECT_ENDPOINT,
+            credential=build_azure_credential(),
+        )
+        try:
+            client.agents.get(AGENT_NAME)
+            openai_client = client.get_openai_client(agent_name=AGENT_NAME)
+            conversation = openai_client.conversations.create()
+        except HttpResponseError as error:
+            client.close()
+            raise RuntimeError(
+                f"Unable to access Foundry agent '{AGENT_NAME}'. Check "
+                "FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_AGENT_NAME."
+            ) from error
+        session = {
+            "client": client,
+            "openai_client": openai_client,
+            "conversation_id": conversation.id,
+            "state": {
+                "current_intent": None,
+                "stage": "diagnosing",
+                "diagnosis": [],
+                "recommended_action": None,
+                "escalation": {"required": False, "reason": None},
+            },
+            "actions": [],
+        }
+        SESSIONS[session_id] = session
+
+    response = session["openai_client"].responses.create(
+        conversation=session["conversation_id"],
+        input=user_text,
+    )
+    response = complete_response(
+        session["openai_client"],
+        session["conversation_id"],
+        response,
+        session_id,
+        session["state"],
+        session["actions"],
+        user_approved,
+    )
+    if not session["state"]["diagnosis"]:
+        tool_name = fallback_diagnostic_tool(user_text)
+        if tool_name:
+            run_diagnostic(tool_name, session["state"])
+    reply_text = re.sub(r"【.*?】", "", response.output_text or "").strip()
+    return reply_text, ui_state_for(session["state"])

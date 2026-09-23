@@ -28,10 +28,10 @@ class ActionRequest(BaseModel):
 
 
 class TicketRequest(BaseModel):
-    issue: str
+    symptom: str
     diagnostics_run: list[dict]
     actions_attempted: list[dict]
-    result: str
+    routing_team: str
 
 
 @app.get("/")
@@ -125,10 +125,10 @@ def execute_action(request: ActionRequest):
 def ticket_creation(request: TicketRequest):
     return {
         "ticket_id": f"INC-{uuid4().hex[:8].upper()}",
-        "issue": request.issue,
+        "symptom": request.symptom,
         "diagnostics": request.diagnostics_run,
         "actions": request.actions_attempted,
-        "result": request.result,
+        "routing_team": request.routing_team,
         "status": "open",
     }
 
@@ -140,3 +140,9 @@ def create_log():
         event="backend_event",
         details="Backend event logged"
     )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=5673)
