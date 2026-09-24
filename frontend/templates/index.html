@@ -3,15 +3,28 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Voice Meeting Support</title>
+    <title>AI IT Incident Triage Agent</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <main class="dashboard">
         <header class="topbar">
-            <div class="wordmark"><span class="wordmark-mark">V</span><div><p>VOICE MEETING SUPPORT</p><span>Tier-1 diagnostic desk</span></div></div>
+            <div class="wordmark"><span class="wordmark-mark">T</span><div><p>AI IT INCIDENT TRIAGE</p><span>Evidence-led support desk</span></div></div>
+            <div class="role-controls hidden" id="roleControls"><span id="roleLabel">Prototype role</span><button id="switchRole" type="button">Switch Role</button></div>
             <div class="connection"><i></i> Connected</div>
         </header>
+        <p class="environment-note">Live diagnostic values are supplied by the support backend. Unknown means the host could not expose that signal.</p>
+        <section id="welcomeView" class="welcome-view" aria-labelledby="welcome-title">
+            <span class="eyebrow">AI IT SUPPORT</span>
+            <h1 id="welcome-title">Welcome back</h1>
+            <p>Choose the support workspace for this prototype session.</p>
+            <div class="role-options">
+                <button class="role-button" data-role="employee" type="button"><span>Continue as Employee</span><small>Voice troubleshooting and guided diagnostics</small><strong>&rarr;</strong></button>
+                <button class="role-button" data-role="technician" type="button"><span>Continue as Technician</span><small>Review incidents and diagnostic handoffs</small><strong>&rarr;</strong></button>
+            </div>
+            <small class="prototype-note">Prototype role selection only. This is not authentication.</small>
+        </section>
+        <section id="employeeView">
         <section class="hero" aria-labelledby="hero-title">
             <div class="hero-copy"><span class="eyebrow">REAL-TIME ASSISTANCE</span><h1 id="hero-title">Let&apos;s get your meeting back on track.</h1><p id="voiceStatus">Tap the microphone and describe what went wrong.</p></div>
             <button id="mic" class="talk-button" type="button" aria-label="Talk to support"><span class="mic-icon">&#127908;</span><span>TALK TO SUPPORT</span><span class="talk-hint">Voice input</span></button>
@@ -23,11 +36,17 @@
         </section>
         <section class="dashboard-grid">
             <article class="panel issue-panel"><span class="eyebrow">CURRENT ISSUE</span><div class="issue-icon">!</div><h2 id="title">Waiting for your issue</h2><p id="subtitle">Tell us what is happening in your meeting and we&apos;ll check it.</p><span class="issue-status" id="severity">READY</span></article>
-            <article class="panel diagnosis-panel"><div class="section-heading compact"><div><span class="eyebrow">DIAGNOSIS</span><h2>System checks</h2></div><span class="progress" id="progress">0 / 0</span></div><div class="timeline" id="timeline"><div class="timeline-empty">Diagnostic checks will populate here.</div></div></article>
+            <article class="panel diagnosis-panel"><div class="section-heading compact"><div><span class="eyebrow">DIAGNOSIS TIMELINE</span><h2>System checks</h2></div><span class="progress" id="progress">0 / 0</span></div><div class="agent-status" id="agentStatus">Listening</div><div class="timeline" id="timeline"><div class="timeline-empty">Diagnostic checks will populate here.</div></div></article>
             <article class="panel action-panel" id="approval"><span class="eyebrow">RECOMMENDED ACTION</span><h2 id="actionTitle">We&apos;ll recommend the next step here.</h2><p id="actionDescription">Run a diagnostic to receive a plain-language action.</p><button id="approve" class="approve-button" type="button" disabled>Approve &amp; Test <span>&rarr;</span></button><p id="verify" class="verify-status hidden">Running a verification check...</p></article>
-            <article class="panel escalation-panel hidden" id="escalation"><span class="eyebrow">ESCALATION</span><h2>Tier-2 support ticket</h2><p id="escalationSummary">The captured evidence has been routed to support.</p><dl><div><dt>Ticket ID</dt><dd id="ticketId">-</dd></div><div><dt>Routing team</dt><dd id="routingTeam">-</dd></div><div><dt>Diagnostics</dt><dd id="diagnosticCount">0 checks</dd></div></dl></article>
+            <article class="panel verification-panel"><span class="eyebrow">VERIFICATION</span><h2 id="verificationTitle">Pending</h2><p id="verificationDetail">A result will appear after an approved action is tested.</p></article>
+            <article class="panel escalation-panel hidden" id="escalation"><span class="eyebrow">ISSUE ESCALATED</span><h2>IT support has the case</h2><p id="escalationSummary">The captured evidence has been routed to support.</p><dl><div><dt>Incident ID</dt><dd id="ticketId">-</dd></div><div><dt>Routing team</dt><dd id="routingTeam">-</dd></div><div><dt>Diagnostics</dt><dd id="diagnosticCount">0 checks</dd></div></dl></article>
         </section>
-        <footer><span>Actions are approval-gated and verified before resolution.</span><button id="new" type="button">Start new session</button></footer>
+        </section>
+        <section id="technicianView" class="technician-view hidden">
+            <div class="technician-heading"><div><span class="eyebrow">TECHNICIAN WORKSPACE</span><h1>Incoming incidents, with the evidence intact.</h1></div><button id="refreshIncidents" class="refresh-button" type="button">Refresh list</button></div>
+            <div class="technician-grid"><section class="incident-list-panel"><div class="section-heading"><div><span class="eyebrow">OPEN CASES</span><h2>Incident queue</h2></div><span class="progress" id="incidentCount">0</span></div><div id="incidentList" class="incident-list"><p class="timeline-empty">Loading incidents...</p></div></section><section id="incidentDetail" class="incident-detail-panel"><p class="timeline-empty">Select an incident to inspect its diagnostic handoff.</p></section></div>
+        </section>
+        <footer><span>Actions are approval-gated and verified before resolution.</span><div class="footer-actions"><button id="new" type="button">Start new session</button><button id="footerSwitchRole" type="button">Switch Role</button></div></footer>
     </main>
     <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </body>

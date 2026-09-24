@@ -1,0 +1,712 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Voice Meeting Support Backend Diagnostics API",
+    "version": "1.0.0",
+    "description": "HTTP tools for the AI IT Incident Triage Agent. Diagnostic values are returned by the backend and must be passed through without fabrication."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:5673",
+      "description": "Local backend started with backend/main.py"
+    }
+  ],
+  "paths": {
+    "/api/diagnostics/check_microphone": {
+      "get": {
+        "operationId": "check_microphone",
+        "summary": "Check the machine microphone",
+        "description": "Use when the user reports microphone or audio-input problems. Returns actual machine microphone and device information where the backend can observe it. Never fabricate results; preserve an explicit unknown status when the environment cannot be inspected.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Device"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observed microphone state, or an explicit unknown result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrophoneDiagnostic"
+                },
+                "example": {
+                  "status": "unknown",
+                  "reason": "Microphone diagnostic dependency unavailable"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/diagnostics/check_camera": {
+      "get": {
+        "operationId": "check_camera",
+        "summary": "Check the machine camera",
+        "description": "Use when the user reports camera or video problems. Returns actual camera and device information where available. Never fabricate results; preserve an explicit unknown status when the environment cannot be inspected.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Device"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observed camera state, or an explicit unknown result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CameraDiagnostic"
+                },
+                "example": {
+                  "status": "working",
+                  "detected": true,
+                  "connected": true,
+                  "device": "default",
+                  "device_index": 0,
+                  "in_use": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/diagnostics/check_speaker": {
+      "get": {
+        "operationId": "check_speaker",
+        "summary": "Check the machine speaker",
+        "description": "Use when the user reports speaker or audio-output problems. Returns actual output-device information where available. Never fabricate results; preserve an explicit unknown status when the environment cannot be inspected.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Device"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observed speaker state, or an explicit unknown result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeakerDiagnostic"
+                },
+                "example": {
+                  "status": "working",
+                  "detected": true,
+                  "connected": true,
+                  "device": "default",
+                  "volume_percent": 64.0,
+                  "muted": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/diagnostics/check_connectivity": {
+      "get": {
+        "operationId": "check_connectivity",
+        "summary": "Check network connectivity",
+        "description": "Use when the user reports connectivity, meeting-joining, or network problems. Returns actual connectivity test results from the backend, including the tested host and latency when available. Never fabricate results.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectivityHost"
+          },
+          {
+            "$ref": "#/components/parameters/ConnectivityTimeout"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observed connectivity result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectivityDiagnostic"
+                },
+                "example": {
+                  "status": "working",
+                  "internet": true,
+                  "host": "8.8.8.8",
+                  "latency_ms": 48.2,
+                  "packet_loss_percent": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/diagnostics/check_app_state": {
+      "get": {
+        "operationId": "check_app_state",
+        "summary": "Check observable application state",
+        "description": "Use when the agent needs to determine whether a relevant application is running or whether its observable local state is available. The backend returns unknown when the state cannot be reliably observed; do not infer signed-in state or version from application presence.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Application"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observable application state, or an explicit unknown result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppStateDiagnostic"
+                },
+                "example": {
+                  "status": "running",
+                  "application": "Teams",
+                  "running": true,
+                  "signed_in": "unknown",
+                  "version": "unknown"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/diagnostics/run_test": {
+      "get": {
+        "operationId": "run_test",
+        "summary": "Run a concrete verification test",
+        "description": "Use when the agent needs a concrete verification test after troubleshooting. Accept only the backend's narrowly defined test types: audio_test, camera_test, or connectivity_test. Return and interpret the structured result; do not claim success without the returned verification result.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TestType"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Structured verification result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestResult"
+                },
+                "example": {
+                  "test_type": "connectivity_test",
+                  "result": "pass",
+                  "connectivity": {
+                    "status": "working",
+                    "internet": true,
+                    "host": "8.8.8.8",
+                    "latency_ms": 48.2,
+                    "packet_loss_percent": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/incidents": {
+      "post": {
+        "operationId": "create_incident",
+        "summary": "Create an unresolved incident",
+        "description": "Use ONLY after troubleshooting has been attempted and the issue remains unresolved, a safe recovery cannot be performed, a required action is outside the agent's permissions, or a tool failure prevents reliable diagnosis. Create a structured incident containing the diagnostic evidence already collected. Do not omit or invent evidence.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncidentRequest"
+              },
+              "example": {
+                "employee": {
+                  "id": "EMP-001",
+                  "name": "Alex Sharma"
+                },
+                "issue": {
+                  "type": "microphone",
+                  "summary": "Meeting participants cannot hear me"
+                },
+                "user_statement": "Nobody can hear me during my meeting.",
+                "diagnostics": [
+                  {
+                    "tool": "check_microphone",
+                    "status": "unknown"
+                  }
+                ],
+                "questions_answered": [],
+                "knowledge_used": [],
+                "actions_attempted": [],
+                "verification": {
+                  "result": "unknown",
+                  "reason": "Microphone state could not be reliably verified"
+                },
+                "likely_area": "application_permission",
+                "recommended_team": "Endpoint Support",
+                "status": "needs_human"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Incident created with a generated incident ID and preserved handoff evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Incident"
+                },
+                "example": {
+                  "incident_id": "INC-9137EF34",
+                  "employee": {
+                    "id": "EMP-001",
+                    "name": "Alex Sharma"
+                  },
+                  "employee_id": "EMP-001",
+                  "employee_name": "Alex Sharma",
+                  "status": "needs_human",
+                  "issue": {
+                    "type": "microphone",
+                    "summary": "Meeting participants cannot hear me"
+                  },
+                  "issue_type": "microphone",
+                  "user_report": "",
+                  "questions_answered": [],
+                  "diagnostics": [
+                    {
+                      "tool": "check_microphone",
+                      "status": "unknown"
+                    }
+                  ],
+                  "knowledge_used": [],
+                  "actions_attempted": [],
+                  "approval_history": [],
+                  "verification": {
+                    "result": "unknown",
+                    "reason": "Microphone state could not be reliably verified"
+                  },
+                  "final_outcome": "needs_technician",
+                  "likely_area": "application_permission",
+                  "recommended_team": "Endpoint Support",
+                  "created_at": "2026-09-23T14:00:59.893042+00:00"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Device": {
+        "name": "device",
+        "in": "query",
+        "required": false,
+        "description": "Device selector passed to the backend. The default value asks the backend to inspect its default device.",
+        "schema": {
+          "type": "string",
+          "default": "default"
+        }
+      },
+      "ConnectivityHost": {
+        "name": "host",
+        "in": "query",
+        "required": false,
+        "description": "Host to test for network connectivity.",
+        "schema": {
+          "type": "string",
+          "default": "8.8.8.8"
+        }
+      },
+      "ConnectivityTimeout": {
+        "name": "timeout_seconds",
+        "in": "query",
+        "required": false,
+        "description": "Connection timeout in seconds.",
+        "schema": {
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "maximum": 10,
+          "default": 2.0
+        }
+      },
+      "Application": {
+        "name": "application",
+        "in": "query",
+        "required": false,
+        "description": "Application name whose observable local process state should be checked.",
+        "schema": {
+          "type": "string",
+          "default": "Teams"
+        }
+      },
+      "TestType": {
+        "name": "test_type",
+        "in": "query",
+        "required": true,
+        "description": "Verification test implemented by the backend.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "audio_test",
+            "camera_test",
+            "connectivity_test"
+          ]
+        }
+      }
+    },
+    "schemas": {
+      "DiagnosticBase": {
+        "type": "object",
+        "description": "Backend diagnostic result. Additional fields vary by diagnostic and may be present when observed.",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Observed state, or unknown when reliable observation is unavailable."
+          },
+          "reason": {
+            "type": "string"
+          },
+          "error_code": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "MicrophoneDiagnostic": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DiagnosticBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detected": {
+                "type": "boolean"
+              },
+              "connected": {
+                "type": "boolean"
+              },
+              "device": {
+                "type": "string"
+              },
+              "permission": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "CameraDiagnostic": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DiagnosticBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detected": {
+                "type": "boolean"
+              },
+              "connected": {
+                "type": "boolean"
+              },
+              "device": {
+                "type": "string"
+              },
+              "device_index": {
+                "type": "integer"
+              },
+              "in_use": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "SpeakerDiagnostic": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DiagnosticBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "detected": {
+                "type": "boolean"
+              },
+              "connected": {
+                "type": "boolean"
+              },
+              "device": {
+                "type": "string"
+              },
+              "volume_percent": {
+                "type": "number"
+              },
+              "muted": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "ConnectivityDiagnostic": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DiagnosticBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "internet": {
+                "type": "boolean"
+              },
+              "host": {
+                "type": "string"
+              },
+              "latency_ms": {
+                "type": "number"
+              },
+              "packet_loss_percent": {
+                "type": "number"
+              }
+            }
+          }
+        ]
+      },
+      "AppStateDiagnostic": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DiagnosticBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "application": {
+                "type": "string"
+              },
+              "running": {
+                "type": "boolean"
+              },
+              "signed_in": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "TestResult": {
+        "type": "object",
+        "required": [
+          "test_type",
+          "result"
+        ],
+        "properties": {
+          "test_type": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "unknown"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "microphone": {
+            "$ref": "#/components/schemas/MicrophoneDiagnostic"
+          },
+          "speaker": {
+            "$ref": "#/components/schemas/SpeakerDiagnostic"
+          },
+          "camera": {
+            "$ref": "#/components/schemas/CameraDiagnostic"
+          },
+          "connectivity": {
+            "$ref": "#/components/schemas/ConnectivityDiagnostic"
+          }
+        },
+        "additionalProperties": true
+      },
+      "IncidentRequest": {
+        "type": "object",
+        "required": [
+          "user_statement"
+        ],
+        "properties": {
+          "employee": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "issue": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "user_statement": {
+            "type": "string"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "questions_answered": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "knowledge_used": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "actions_attempted": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "verification": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "likely_area": {
+            "type": "string",
+            "default": "unknown"
+          },
+          "recommended_team": {
+            "type": "string",
+            "default": "IT Helpdesk"
+          },
+          "status": {
+            "type": "string",
+            "default": "needs_human"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Incident": {
+        "type": "object",
+        "required": [
+          "incident_id",
+          "employee",
+          "employee_id",
+          "employee_name",
+          "status",
+          "issue",
+          "issue_type",
+          "user_report",
+          "questions_answered",
+          "diagnostics",
+          "knowledge_used",
+          "actions_attempted",
+          "approval_history",
+          "verification",
+          "final_outcome",
+          "likely_area",
+          "recommended_team",
+          "created_at"
+        ],
+        "properties": {
+          "incident_id": {
+            "type": "string"
+          },
+          "employee": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "employee_id": {
+            "type": "string"
+          },
+          "employee_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "issue": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "issue_type": {
+            "type": "string"
+          },
+          "user_report": {
+            "type": "string"
+          },
+          "questions_answered": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "knowledge_used": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "actions_attempted": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "approval_history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "verification": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "final_outcome": {
+            "type": "string"
+          },
+          "likely_area": {
+            "type": "string"
+          },
+          "recommended_team": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

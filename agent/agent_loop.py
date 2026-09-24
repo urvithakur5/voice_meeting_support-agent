@@ -15,17 +15,30 @@ from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from dotenv import load_dotenv
 from openai import BadRequestError
 
-from real_diagnostics import (
-    check_camera,
-    check_connectivity,
-    check_mic,
-    check_speaker,
-    approved_action as approve_mock_action,
-    fix_camera,
-    fix_connectivity,
-    fix_mic,
-    fix_speaker,
-)
+try:
+    from .real_diagnostics import (
+        check_camera,
+        check_connectivity,
+        check_mic,
+        check_speaker,
+        approved_action as approve_mock_action,
+        fix_camera,
+        fix_connectivity,
+        fix_mic,
+        fix_speaker,
+    )
+except ImportError:
+    from real_diagnostics import (
+        check_camera,
+        check_connectivity,
+        check_mic,
+        check_speaker,
+        approved_action as approve_mock_action,
+        fix_camera,
+        fix_connectivity,
+        fix_mic,
+        fix_speaker,
+    )
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
@@ -33,7 +46,7 @@ BACKEND_URL = (
     os.environ.get("BACKEND_URL") or "http://localhost:5673"
 ).rstrip("/")
 TICKET_BACKEND_URL = (
-    os.environ.get("TICKET_BACKEND_URL") or "http://localhost:8002"
+    os.environ.get("TICKET_BACKEND_URL") or BACKEND_URL
 ).rstrip("/")
 PROJECT_ENDPOINT = (
     os.environ.get("FOUNDRY_PROJECT_ENDPOINT")
@@ -48,15 +61,10 @@ if "/api/projects/" not in PROJECT_ENDPOINT:
     )
 POLL_INTERVAL_SECONDS = 1
 SYSTEM_PROMPT = (
-    'CRITICAL: You are an automated Tier-1 IT diagnostic agent. You have direct '
-    'access to system diagnostic tools. NEVER ask the user to perform manual '
-    'troubleshooting steps. NEVER ask the user what OS they are on. If a user '
-    'reports an audio/microphone issue, you MUST immediately execute the '
-    '"check_mic" function in the background. Your ONLY job is to run tools, '
-    'read the JSON output, and tell the user what you found in 1 to 2 short '
-    'sentences. Do not retrieve or read any RAG or manual knowledge during '
-    'initial triage. Only consult it if check_mic returns an error requiring '
-    'human intervention.'
+    "You are a Tier-1 IT diagnostic agent. Use the diagnostic tools immediately. "
+    "Do not ask for OS details or manual troubleshooting. Read tool JSON and "
+    "reply in 1-2 short sentences. Use RAG/manual guidance only after a tool "
+    "reports an error requiring human intervention."
 )
 
 TOOL_NAMES = {
@@ -292,11 +300,11 @@ def tool_result(tool_call_id: str, output: Any) -> dict:
     return {"tool_call_id": tool_call_id, "output": json.dumps(output)}
 
 
-REAL_DIAGNOSTICS = {
-    "check_mic": check_mic,
-    "check_camera": check_camera,
-    "check_speaker": check_speaker,
-    "check_connectivity": check_connectivity,
+DIAGNOSTIC_ENDPOINTS = {
+    "check_mic": "/api/diagnostics/check_microphone",
+    "check_camera": "/api/diagnostics/check_camera",
+    "check_speaker": "/api/diagnostics/check_speaker",
+    "check_connectivity": "/api/diagnostics/check_connectivity",
 }
 
 REAL_FIXES = {
@@ -311,15 +319,19 @@ SESSIONS: dict[str, dict[str, Any]] = {}
 
 def run_diagnostic(tool_name: str, state: dict) -> dict:
     print(f"[tool] {tool_name}")
-    raw_diagnostic = REAL_DIAGNOSTICS[tool_name]()
-    diagnostic = (
-        json.loads(raw_diagnostic)
-        if isinstance(raw_diagnostic, str)
-        else raw_diagnostic
-    )
+    diagnostic = request_backend("GET", DIAGNOSTIC_ENDPOINTS[tool_name])
     state["current_intent"] = tool_name.removeprefix("check_")
     state["diagnosis"].append(diagnostic)
     return diagnostic
+
+
+def fallback_reply(tool_name: str, diagnostic: dict) -> str:
+    status = diagnostic.get("status", "unknown")
+    message = diagnostic.get("message") or diagnostic.get("reason")
+    label = tool_name.removeprefix("check_").replace("_", " ")
+    if message:
+        return f"I checked your {label}. {message}"
+    return f"I checked your {label}; the backend reported {status}."
 
 
 def fallback_diagnostic_tool(user_text: str) -> str | None:
@@ -331,11 +343,11 @@ def fallback_diagnostic_tool(user_text: str) -> str | None:
         or "cannot hear me" in normalized
     ):
         return "check_mic"
+    if any(term in normalized for term in ("microphone", "mic", "headset")):
+        return "check_mic"
     if "camera" in normalized or "webcam" in normalized:
         return "check_camera"
-    if "microphone" in normalized or "mic" in normalized:
-        return "check_mic"
-    if "speaker" in normalized or "audio" in normalized:
+    if "speaker" in normalized or "audio" in normalized or "sound" in normalized:
         return "check_speaker"
     if "internet" in normalized or "wifi" in normalized or "connection" in normalized:
         return "check_connectivity"
@@ -735,6 +747,8 @@ def complete_response(
             input=outputs,
             tools=diagnostic_tools,
             tool_choice="auto",
+            temperature=0.2,
+            max_output_tokens=100,
         )
 
 
@@ -770,6 +784,8 @@ def ui_state_for(state: dict) -> dict:
         else None,
         **state,
         "recommended_action": recommended_action,
+        "verification": state.get("verification", {}),
+        "agent_status": state.get("stage", "diagnosing"),
     }
 
 
@@ -860,6 +876,8 @@ def run_agent_turn(
         "input": user_text,
         "tools": diagnostic_tools,
         "tool_choice": tool_choice,
+        "temperature": 0.2,
+        "max_output_tokens": 100,
     }
     try:
         response = session["openai_client"].responses.create(**response_arguments)
@@ -868,10 +886,8 @@ def run_agent_turn(
             raise
         response = session["openai_client"].responses.create(
             conversation=session["conversation_id"],
-            instructions=SYSTEM_PROMPT,
             input=user_text,
-            tools=diagnostic_tools,
-            tool_choice=tool_choice,
+            max_output_tokens=100,
         )
     response = complete_response(
         session["openai_client"],
@@ -883,4 +899,9 @@ def run_agent_turn(
         user_approved,
     )
     reply_text = enforce_voice_brevity(response.output_text)
+    if tool_name and not session["state"].get("diagnosis"):
+        diagnostic = run_diagnostic(tool_name, session["state"])
+        reply_text = fallback_reply(tool_name, diagnostic)
+    elif not reply_text and session["state"].get("diagnosis"):
+        reply_text = fallback_reply(tool_name or "meeting support", session["state"]["diagnosis"][-1])
     return reply_text, ui_state_for(session["state"])

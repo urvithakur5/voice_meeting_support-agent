@@ -85,13 +85,24 @@ Resolve or Escalate
 
 ## Diagnostic Endpoints
 
-GET /diagnostics/mic
+The real machine diagnostics are separate from the legacy scenario endpoints.
+They report observed values or `status: "unknown"` when Windows or a dependency
+cannot expose the requested state.
 
-GET /diagnostics/camera
+GET /api/diagnostics/check_microphone?device=default
 
-GET /diagnostics/speaker
+GET /api/diagnostics/check_camera?device=default
 
-GET /diagnostics/connectivity
+GET /api/diagnostics/check_speaker?device=default
+
+GET /api/diagnostics/check_connectivity?host=8.8.8.8&timeout_seconds=2
+
+GET /api/diagnostics/check_app_state?application=Teams
+
+GET /api/diagnostics/run_test?test_type=audio_test
+
+Supported test types are `audio_test`, `camera_test`, and
+`connectivity_test`.
 
 ## Action Endpoints
 
@@ -122,6 +133,39 @@ GET /verification/speaker
 POST /tickets
 
 POST /logs
+
+The prototype ticket route is `POST /api/tickets`. It accepts the original
+Foundry payload (`symptom`, `diagnostics_run`, `actions_attempted`, and
+`routing_team`) and also stores the structured incident handoff fields.
+
+Technician endpoints:
+
+GET /api/tickets
+
+GET /api/tickets/{incident_id}
+
+PATCH /api/tickets/{incident_id}/status
+
+Incidents are stored in `backend/data/incidents.json` and survive a backend
+restart during the demo. The response retains `ticket_id`, `diagnostics`,
+`actions`, and `routing_team` for compatibility with the existing voice/Foundry
+loop.
+
+## Microsoft Foundry Tool Schemas
+
+Expose these HTTP GET operations as function tools. The backend is the source
+of diagnostic values; the model must pass through the returned JSON unchanged.
+
+```json
+[
+  {"name":"check_microphone","method":"GET","path":"/api/diagnostics/check_microphone","parameters":{"device":{"type":"string","default":"default"}}},
+  {"name":"check_camera","method":"GET","path":"/api/diagnostics/check_camera","parameters":{"device":{"type":"string","default":"default"}}},
+  {"name":"check_speaker","method":"GET","path":"/api/diagnostics/check_speaker","parameters":{"device":{"type":"string","default":"default"}}},
+  {"name":"check_connectivity","method":"GET","path":"/api/diagnostics/check_connectivity","parameters":{"host":{"type":"string","default":"8.8.8.8"},"timeout_seconds":{"type":"number","minimum":0.1,"maximum":10,"default":2}}},
+  {"name":"check_app_state","method":"GET","path":"/api/diagnostics/check_app_state","parameters":{"application":{"type":"string","default":"Teams"}}},
+  {"name":"run_test","method":"GET","path":"/api/diagnostics/run_test","parameters":{"test_type":{"type":"string","enum":["audio_test","camera_test","connectivity_test"]}}}
+]
+```
 
 ## Testing
 

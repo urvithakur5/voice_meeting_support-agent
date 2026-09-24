@@ -11,6 +11,19 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Local runtime logs
+*.log
+
+# Local incident and diagnostic data
+backend/data/*.json
+backend/data/*.jsonl
+!backend/data/.gitkeep
+
+# OS and editor metadata
+.DS_Store
+Thumbs.db
+.vscode/
+
 # Local credentials and certificates
 *.pem
 *.key

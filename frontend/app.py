@@ -27,6 +27,7 @@ recognizer = speechsdk.SpeechRecognizer(
 # Create the Flask application
 app = Flask(__name__)
 BACKEND_URL = "http://127.0.0.1:5673"
+FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", "8001"))
 
 # Predefined IT support scenarios
 # Each scenario contains:
@@ -332,4 +333,4 @@ if __name__ == "__main__":
 
     # debug=True automatically reloads the server
     # when code changes during development
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    app.run(host="0.0.0.0", port=FRONTEND_PORT, debug=False)
