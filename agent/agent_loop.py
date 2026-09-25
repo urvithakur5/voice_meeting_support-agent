@@ -61,10 +61,25 @@ if "/api/projects/" not in PROJECT_ENDPOINT:
     )
 POLL_INTERVAL_SECONDS = 1
 SYSTEM_PROMPT = (
-    "You are a Tier-1 IT diagnostic agent. Use the diagnostic tools immediately. "
-    "Do not ask for OS details or manual troubleshooting. Read tool JSON and "
-    "reply in 1-2 short sentences. Use RAG/manual guidance only after a tool "
-    "reports an error requiring human intervention."
+    "You are a Tier-1 IT diagnostic agent. Your job is to triage IT problems "
+    "reported in natural language by employees. "
+    "\n\nWhen an employee describes a problem, immediately select the most appropriate "
+    "deterministic diagnostic tool and call it — do NOT ask them to choose a category. "
+    "The employee will never say 'run check_wifi'; they will say 'my Wi-Fi keeps dropping'. "
+    "\n\nAvailable diagnostic areas: "
+    "microphone, camera, speaker, connectivity, Wi-Fi, VPN, Bluetooth audio, "
+    "display/monitor, docking station, browser, application, system performance. "
+    "\n\nRules: "
+    "1. Call the diagnostic tool first. Read its JSON output carefully. "
+    "2. Only ask follow-up questions if the answer changes which tool to call. "
+    "3. Never invent diagnostic evidence. If the tool returns unknown, say so. "
+    "4. Explain what the tool actually found in 1-2 sentences. "
+    "5. Recommend only approved actions. Gate write actions behind user approval. "
+    "6. After an action, verify with the appropriate tool. "
+    "7. Resolve when verification passes. Escalate with create_incident when it does not. "
+    "8. Use RAG knowledge only after a tool reports an issue requiring human guidance. "
+    "9. Do not ask for OS details, driver versions, or other information "
+    "the diagnostic tools can observe directly."
 )
 
 TOOL_NAMES = {
@@ -72,6 +87,15 @@ TOOL_NAMES = {
     "check_camera",
     "check_speaker",
     "check_connectivity",
+    # Extended diagnostic tools
+    "check_wifi",
+    "check_vpn",
+    "check_bluetooth_audio",
+    "check_display",
+    "check_dock",
+    "check_browser_state",
+    "check_application_state",
+    "check_performance",
 }
 
 FIX_TO_DIAGNOSTIC = {
@@ -186,6 +210,126 @@ diagnostic_tools = [
                 "actions_attempted",
                 "routing_team",
             ],
+            "additionalProperties": False,
+        },
+    },
+    # ── Extended diagnostic tools ────────────────────────────────────────
+    {
+        "type": "function",
+        "name": "check_wifi",
+        "description": (
+            "Check Wi-Fi adapter state, SSID, signal strength, and internet reachability. "
+            "Use when the user reports Wi-Fi disconnects, slow wireless, or can't connect to Wi-Fi."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "check_vpn",
+        "description": (
+            "Detect whether a VPN adapter is present and up. "
+            "Use when the user reports VPN connection failures or cannot access corporate resources. "
+            "Does NOT verify VPN authentication — reports adapter state only."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "check_bluetooth_audio",
+        "description": (
+            "Check Bluetooth subsystem availability and whether a Bluetooth audio headset is connected "
+            "and appears as an active audio endpoint. "
+            "Use when the user reports Bluetooth headset or audio problems."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "check_display",
+        "description": (
+            "Check display adapters, connected monitors, resolutions, and active state. "
+            "Use when the user reports a black screen, missing monitor, or display issues."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "check_dock",
+        "description": (
+            "Check whether a docking station or USB hub is detected, and count connected peripherals. "
+            "Use when the user reports that their dock stopped working or isn't detecting monitors."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "check_browser_state",
+        "description": (
+            "Check which browsers are running and optionally test network reachability to a target host. "
+            "Use when the user reports browser problems or company portal issues. "
+            "Does NOT read browsing history, cookies, passwords, or private data."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target_host": {
+                    "type": "string",
+                    "description": "Optional hostname to test reachability (e.g. 'portal.company.com'). Leave empty if not needed.",
+                },
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "check_application_state",
+        "description": (
+            "Check whether a specific application process is running and read its version. "
+            "Use when the user reports that an application is freezing, crashing, or won't start. "
+            "Does NOT terminate processes or read private application data."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "application": {
+                    "type": "string",
+                    "description": "The application name without .exe (e.g. 'Teams', 'Zoom', 'Outlook').",
+                },
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "check_performance",
+        "description": (
+            "Measure CPU usage, memory usage, disk free space, and system uptime. "
+            "Use when the user reports that their computer is extremely slow or unresponsive. "
+            "Returns measurements only — does NOT diagnose the root cause."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {},
             "additionalProperties": False,
         },
     },
@@ -305,6 +449,15 @@ DIAGNOSTIC_ENDPOINTS = {
     "check_camera": "/api/diagnostics/check_camera",
     "check_speaker": "/api/diagnostics/check_speaker",
     "check_connectivity": "/api/diagnostics/check_connectivity",
+    # Extended diagnostic areas
+    "check_wifi": "/api/diagnostics/check_wifi",
+    "check_vpn": "/api/diagnostics/check_vpn",
+    "check_bluetooth_audio": "/api/diagnostics/check_bluetooth_audio",
+    "check_display": "/api/diagnostics/check_display",
+    "check_dock": "/api/diagnostics/check_dock",
+    "check_browser_state": "/api/diagnostics/check_browser_state",
+    "check_application_state": "/api/diagnostics/check_application_state",
+    "check_performance": "/api/diagnostics/check_performance",
 }
 
 REAL_FIXES = {
@@ -336,6 +489,7 @@ def fallback_reply(tool_name: str, diagnostic: dict) -> str:
 
 def fallback_diagnostic_tool(user_text: str) -> str | None:
     normalized = user_text.lower()
+    # ── Original patterns (unchanged) ─────────────────────────────────────
     if (
         "nobody can hear me" in normalized
         or "no one can hear me" in normalized
@@ -343,13 +497,30 @@ def fallback_diagnostic_tool(user_text: str) -> str | None:
         or "cannot hear me" in normalized
     ):
         return "check_mic"
-    if any(term in normalized for term in ("microphone", "mic", "headset")):
+    if any(term in normalized for term in ("microphone", "mic")):
         return "check_mic"
     if "camera" in normalized or "webcam" in normalized:
         return "check_camera"
-    if "speaker" in normalized or "audio" in normalized or "sound" in normalized:
+    if "speaker" in normalized or ("audio" in normalized and "bluetooth" not in normalized):
         return "check_speaker"
-    if "internet" in normalized or "wifi" in normalized or "connection" in normalized:
+    # ── Extended patterns ──────────────────────────────────────────────────
+    if any(term in normalized for term in ("wi-fi", "wifi", "wireless", "wlan")):
+        return "check_wifi"
+    if any(term in normalized for term in ("vpn", "secure connect", "corporate network", "remote access")):
+        return "check_vpn"
+    if any(term in normalized for term in ("bluetooth", "headset", "bt headphone", "bt audio")):
+        return "check_bluetooth_audio"
+    if any(term in normalized for term in ("monitor", "display", "screen", "second screen", "external screen", "hdmi")):
+        return "check_display"
+    if any(term in normalized for term in ("dock", "docking", "port replicator")):
+        return "check_dock"
+    if any(term in normalized for term in ("browser", "chrome", "edge", "firefox", "portal", "website", "web page", "webpage")):
+        return "check_browser_state"
+    if any(term in normalized for term in ("slow", "lagging", "performance", "cpu", "memory", "ram", "disk space", "freezing", "frozen")):
+        return "check_performance"
+    if any(term in normalized for term in ("application", "app ", "teams", "zoom", "outlook", "crashing", "won't start", "not opening")):
+        return "check_application_state"
+    if any(term in normalized for term in ("internet", "connection", "network")):
         return "check_connectivity"
     return None
 
@@ -752,33 +923,68 @@ def complete_response(
         )
 
 
+def _checklist_from_diagnostics(diagnosis: list[dict]) -> list[dict]:
+    """Pass through observed tool results without inventing failures.
+
+    Handles both legacy tool results (status/message/error_code) and
+    new-area results (title/reason/observations from area_result).
+    """
+    checklist = []
+    for item in diagnosis:
+        if not isinstance(item, dict):
+            checklist.append({"title": str(item), "state": "unknown"})
+            continue
+        permission = item.get("permission")
+        status = str(item.get("status") or "unknown").lower()
+        observations = item.get("observations") or []
+        if permission in (False, "blocked", "denied"):
+            perm_state = "failed"
+            perm_detail = "Application microphone permission blocked"
+        elif permission in (True, "granted", "allowed"):
+            perm_state = "completed"
+            perm_detail = "Application microphone permission granted"
+        else:
+            perm_state = "unknown"
+            perm_detail = "Application permission: Not observable"
+        checklist.append(
+            {
+                "title": item.get("title")
+                or item.get("name")
+                or item.get("tool")
+                or "Diagnostic check",
+                "detail": item.get("reason") or item.get("message") or item.get("details") or status,
+                "state": status,
+                "detected": item.get("detected"),
+                "connected": item.get("connected"),
+                "permission": permission,
+                "permission_state": perm_state,
+                "permission_detail": perm_detail,
+                "observations": observations,
+                **{key: value for key, value in item.items() if key not in {"title"}},
+            }
+        )
+    return checklist
+
+
 def ui_state_for(state: dict) -> dict:
     """Expose the conversation state in the shape expected by the UI."""
     escalation = state.get("escalation", {"required": False, "reason": None})
     diagnosis = state.get("diagnosis", [])
     latest_diagnostic = diagnosis[-1] if diagnosis else {}
-    microphone_permission_blocked = (
-        state.get("current_intent") == "mic"
-        and latest_diagnostic.get("permission") is False
+    recommended_action = state.get("recommended_action")
+    pending_action_id = state.get("pending_action_id")
+    finding = (
+        latest_diagnostic.get("reason")
+        or latest_diagnostic.get("message")
+        or state.get("finding")
+        or ""
     )
-    if microphone_permission_blocked:
-        issue = "Microphone failure"
-        diagnosis_checklist = [
-            {"label": "Mic connected", "status": "pass"},
-            {"label": "OS permission blocked", "status": "fail"},
-        ]
-        recommended_action = "Allow microphone access for Teams"
-        pending_action_id = "fix_mic_permission"
-    else:
-        issue = state.get("current_intent")
-        diagnosis_checklist = diagnosis
-        recommended_action = state.get("recommended_action")
-        pending_action_id = state.get("pending_action_id")
     return {
-        "issue": issue,
-        "diagnosis_checklist": diagnosis_checklist,
+        "issue": state.get("current_intent") or state.get("issue"),
+        "diagnosis_checklist": _checklist_from_diagnostics(diagnosis),
         "pending_action": recommended_action,
         "pending_action_id": pending_action_id,
+        "finding": finding,
         "escalation_card": state.get("escalation_card")
         if escalation.get("required")
         else None,

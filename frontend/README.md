@@ -1,31 +1,32 @@
-# MeetAssist — HTML + CSS + Python
+# AI IT Incident Triage — Frontend
 
-This is the frontend prototype for Person D of the Voice Meeting Support Agent.
+Product shell around the existing Foundry/voice troubleshooting session.
 
 ## Run
+
+Start the backend and agent first, then:
 
 ```bash
 pip install flask
 python app.py
 ```
 
-Then open http://127.0.0.1:8000
+Open http://127.0.0.1:8001
 
-## Files
+Required local services:
 
-- app.py — Flask backend/mock API
-- templates/index.html — frontend structure and interaction
-- static/style.css — complete UI styling
+- Backend: http://127.0.0.1:5673
+- Agent / Foundry loop: http://127.0.0.1:3002/agent/message
 
-## Included
+## Screens
 
-- Microphone, camera, speaker/audio, join/connectivity scenarios
-- Voice-first microphone interaction mock
-- Live transcript
-- Diagnosis timeline
-- Approval-gated action
-- Verification
-- Resolved state
-- Escalation and ticket mock
-- Text fallback
-- JSON endpoints ready to be replaced with Azure/backend calls
+- Welcome / role selection (`#/`)
+- Employee support home (`#/employee`)
+- Active troubleshooting (`#/employee/session`)
+- Incident created (`#/employee/incident-created`)
+- My Sessions (`#/employee/sessions`)
+- Session detail (`#/employee/sessions/:id`)
+- Technician dashboard (`#/technician`)
+- Incident detail (`#/technician/incident/:id` or `#/incident/:id`)
+
+Voice, transcript, diagnostic timeline, approval, and verification stay on the troubleshooting screen and still call the existing agent API.

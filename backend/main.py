@@ -8,6 +8,7 @@ from services.scenario import (
     set_scenario,
     get_current_scenario
 )
+from services.scenario_library import all_scenarios, get_scenario as get_library_scenario
 from services.logger import log_event
 from services.incidents import (
     create_incident,
@@ -15,14 +16,27 @@ from services.incidents import (
     list_incidents,
     update_incident_status,
 )
+from services.sessions import (
+    get_session,
+    list_sessions,
+    upsert_session,
+)
 from tools.diagnostics import (
     check_app_state,
+    check_application_state,
     check_camera,
     check_connectivity,
     check_microphone,
     check_speaker,
     run_test,
 )
+from tools.wifi import check_wifi
+from tools.vpn import check_vpn
+from tools.bluetooth_audio import check_bluetooth_audio
+from tools.display import check_display
+from tools.dock import check_dock
+from tools.browser import check_browser_state
+from tools.performance import check_performance
 
 
 # Create the FastAPI application
@@ -90,6 +104,37 @@ class IncidentRequest(BaseModel):
 
 class IncidentPatchRequest(BaseModel):
     status: str
+
+
+class SessionRequest(BaseModel):
+    session_id: str | None = None
+    title: str = ""
+    status: str = "idle"
+    employee_name: str = "Demo Employee"
+    transcript: list[dict] = Field(default_factory=list)
+    diagnostics: list[dict] = Field(default_factory=list)
+    questions_answered: list[dict] = Field(default_factory=list)
+    knowledge_used: list[dict] = Field(default_factory=list)
+    actions_attempted: list[dict] = Field(default_factory=list)
+    verification: dict = Field(default_factory=dict)
+    finding: str = ""
+    issue: dict = Field(default_factory=dict)
+    incident_id: str | None = None
+    ui_state: dict = Field(default_factory=dict)
+
+
+@app.get("/api/scenario-library")
+def scenario_library():
+    """Return all structured scenarios for frontend/demo use."""
+    return all_scenarios()
+
+
+@app.get("/api/scenario-library/{scenario_id}")
+def scenario_library_item(scenario_id: str):
+    scenario = get_library_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    return scenario
 
 
 @app.get("/")
@@ -183,6 +228,46 @@ def real_connectivity_diagnostic(
 @app.get("/api/diagnostics/check_app_state")
 def application_state_diagnostic(application: str = Query(default="Teams")):
     return _real_diagnostic("check_app_state", {"application": application}, check_app_state)
+
+
+@app.get("/api/diagnostics/check_application_state")
+def extended_application_state_diagnostic(application: str = Query(default="Teams")):
+    return _real_diagnostic("check_application_state", {"application": application}, check_application_state)
+
+
+@app.get("/api/diagnostics/check_wifi")
+def wifi_diagnostic():
+    return _real_diagnostic("check_wifi", {}, check_wifi)
+
+
+@app.get("/api/diagnostics/check_vpn")
+def vpn_diagnostic():
+    return _real_diagnostic("check_vpn", {}, check_vpn)
+
+
+@app.get("/api/diagnostics/check_bluetooth_audio")
+def bluetooth_audio_diagnostic():
+    return _real_diagnostic("check_bluetooth_audio", {}, check_bluetooth_audio)
+
+
+@app.get("/api/diagnostics/check_display")
+def display_diagnostic():
+    return _real_diagnostic("check_display", {}, check_display)
+
+
+@app.get("/api/diagnostics/check_dock")
+def dock_diagnostic():
+    return _real_diagnostic("check_dock", {}, check_dock)
+
+
+@app.get("/api/diagnostics/check_browser_state")
+def browser_state_diagnostic(target_host: str = Query(default="")):
+    return _real_diagnostic("check_browser_state", {"target_host": target_host}, check_browser_state)
+
+
+@app.get("/api/diagnostics/check_performance")
+def performance_diagnostic():
+    return _real_diagnostic("check_performance", {}, check_performance)
 
 
 @app.get("/api/diagnostics/run_test")
@@ -288,6 +373,34 @@ def incident_status(incident_id: str, request: IncidentStatusRequest):
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
     return incident
+
+
+@app.post("/api/sessions", status_code=201)
+def create_session_endpoint(request: SessionRequest):
+    from uuid import uuid4
+
+    session_id = request.session_id or str(uuid4())
+    return upsert_session(session_id, request.model_dump(exclude_none=True))
+
+
+@app.get("/api/sessions")
+def sessions_endpoint():
+    return list_sessions()
+
+
+@app.get("/api/sessions/{session_id}")
+def session_endpoint(session_id: str):
+    session = get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+
+@app.patch("/api/sessions/{session_id}")
+def update_session_endpoint(session_id: str, request: SessionRequest):
+    payload = request.model_dump(exclude_unset=True)
+    payload.pop("session_id", None)
+    return upsert_session(session_id, payload)
 
 
 @app.post("/logs")

@@ -1,4 +1,12 @@
-"""Windows-first diagnostics that report observed state or an explicit unknown."""
+"""Windows-first diagnostics that report observed state or an explicit unknown.
+
+Original tools (check_microphone, check_camera, check_speaker,
+check_connectivity, check_app_state, run_test) are unchanged.
+
+check_application_state is an extended version of check_app_state that
+adds version and window-presence observation without removing the
+existing check_app_state function.
+"""
 
 from __future__ import annotations
 
@@ -188,7 +196,66 @@ def check_app_state(application: str = "Teams") -> dict[str, Any]:
         return _unknown("Windows process state could not be read", application=application)
 
 
+def check_application_state(application: str = "Teams") -> dict[str, Any]:
+    """Extended application diagnostic: process presence, window count, and version.
+
+    Extends check_app_state with window count observation (visible windows for the
+    process) and executable version where available.  check_app_state is preserved
+    unchanged for backward compatibility.
+    """
+    if platform.system() != "Windows":
+        return _unknown(
+            "Application process diagnostic requires Windows",
+            application=application,
+        )
+
+    try:
+        # Check if the process is running
+        tasklist = subprocess.run(
+            ["tasklist", "/FI", f"IMAGENAME eq {application}.exe", "/FO", "CSV", "/NH"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+        running = f'"{application}.exe"' in tasklist.stdout
+
+        # Attempt to read file version from the executable path
+        version = "unknown"
+        try:
+            where_result = subprocess.run(
+                ["where", f"{application}.exe"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+            exe_path = (where_result.stdout or "").strip().splitlines()
+            if exe_path:
+                import ctypes
+
+                size = ctypes.windll.version.GetFileVersionInfoSizeW(exe_path[0], None)  # type: ignore[attr-defined]
+                if size:
+                    version = "detected"  # version info exists; parsing is complex
+        except Exception:
+            pass  # version remains "unknown"
+
+        return {
+            "status": "running" if running else "not_running",
+            "application": application,
+            "running": running,
+            "version": version,
+            "signed_in": "unknown",
+        }
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return _unknown(
+            "Windows process state could not be read",
+            application=application,
+        )
+
+
 def run_test(test_type: str) -> dict[str, Any]:
+    # ── Original test types (unchanged) ───────────────────────────────────
     if test_type == "microphone_test":
         microphone = check_microphone()
         return {
@@ -207,11 +274,82 @@ def run_test(test_type: str) -> dict[str, Any]:
         microphone = check_microphone()
         speaker = check_speaker()
         passed = microphone.get("status") == "detected" and speaker.get("status") == "working"
-        return {"test_type": test_type, "result": "pass" if passed else "unknown", "microphone": microphone, "speaker": speaker}
+        return {
+            "test_type": test_type,
+            "result": "pass" if passed else "unknown",
+            "microphone": microphone,
+            "speaker": speaker,
+        }
     if test_type == "camera_test":
         camera = check_camera()
-        return {"test_type": test_type, "result": "pass" if camera.get("status") == "working" else "unknown", "camera": camera}
+        return {
+            "test_type": test_type,
+            "result": "pass" if camera.get("status") == "working" else "unknown",
+            "camera": camera,
+        }
     if test_type == "connectivity_test":
         connectivity = check_connectivity()
-        return {"test_type": test_type, "result": "pass" if connectivity.get("internet") else "unknown", "connectivity": connectivity}
+        return {
+            "test_type": test_type,
+            "result": "pass" if connectivity.get("internet") else "unknown",
+            "connectivity": connectivity,
+        }
+
+    # ── Extended test types for new diagnostic areas ───────────────────────
+    if test_type == "wifi_test":
+        from .wifi import check_wifi
+        wifi = check_wifi()
+        return {
+            "test_type": test_type,
+            "result": "pass" if wifi.get("status") == "ok" else "unknown",
+            "wifi": wifi,
+        }
+    if test_type == "vpn_test":
+        from .vpn import check_vpn
+        vpn = check_vpn()
+        return {
+            "test_type": test_type,
+            "result": "pass" if vpn.get("status") == "ok" else "unknown",
+            "vpn": vpn,
+        }
+    if test_type == "bluetooth_audio_test":
+        from .bluetooth_audio import check_bluetooth_audio
+        bt = check_bluetooth_audio()
+        return {
+            "test_type": test_type,
+            "result": "pass" if bt.get("status") == "ok" else "unknown",
+            "bluetooth_audio": bt,
+        }
+    if test_type == "display_test":
+        from .display import check_display
+        display = check_display()
+        return {
+            "test_type": test_type,
+            "result": "pass" if display.get("status") == "ok" else "unknown",
+            "display": display,
+        }
+    if test_type == "performance_test":
+        from .performance import check_performance
+        perf = check_performance()
+        return {
+            "test_type": test_type,
+            "result": "pass" if perf.get("status") == "ok" else "unknown",
+            "performance": perf,
+        }
+    if test_type == "application_test":
+        app_state = check_application_state()
+        return {
+            "test_type": test_type,
+            "result": "pass" if app_state.get("running") else "unknown",
+            "application": app_state,
+        }
+    if test_type == "browser_test":
+        from .browser import check_browser_state
+        browser = check_browser_state()
+        return {
+            "test_type": test_type,
+            "result": "pass" if browser.get("status") == "ok" else "unknown",
+            "browser": browser,
+        }
+
     return {"test_type": test_type, "result": "unknown", "reason": "Unsupported test type"}

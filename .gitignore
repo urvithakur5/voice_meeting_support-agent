@@ -23,6 +23,7 @@ backend/data/*.jsonl
 .DS_Store
 Thumbs.db
 .vscode/
+/backend/knowledge
 
 # Local credentials and certificates
 *.pem

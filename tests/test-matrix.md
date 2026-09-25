@@ -42,3 +42,42 @@ The system should also be tested for:
 - [ ] Verification flow works
 - [ ] Escalation flow works
 - [ ] Voice failure fallback works
+
+## Extended Diagnostic Areas — Verified on Windows Machine (2026-09-24)
+
+| ID | Scenario | Tool | Result on this machine | Verified |
+|---|---|---|---|---|
+| WIFI-001 | Wi-Fi keeps disconnecting | check_wifi | ok — SSID "Saini", signal 84%, latency 13.2ms | ✅ |
+| VPN-001 | VPN won't connect | check_vpn | warning — ProtonVPN TAP adapter disconnected | ✅ |
+| BT-001 | Bluetooth headset won't connect | check_bluetooth_audio | ok — "Headphones (Infinity SPIN 150)" active | ✅ |
+| BT-002 | Headphones connected, no sound | check_bluetooth_audio | ok — endpoint active (same device) | ✅ |
+| DISP-001 | Second monitor not showing | check_display | ok — 2 adapters, 3 monitors (1 integrated active) | ✅ |
+| DOCK-001 | Dock stopped detecting monitor | check_dock | ok — 1 USB hub, 1 monitor, 17 HID devices | ✅ |
+| BROWSER-001 | Company website won't open | check_browser_state | ok — Chrome + Edge running | ✅ |
+| BROWSER-002 | Browser running, page won't load | check_browser_state(host) | ok — google.com reachable 31.4ms | ✅ |
+| APP-001 | Application keeps freezing | check_application_state | running — msedge detected | ✅ |
+| APP-002 | Application won't start | check_application_state | not_running — notepad not running | ✅ |
+| PERF-001 | Laptop extremely slow | check_performance | warning — CPU 8%, memory 94.2%, disk 20.2% | ✅ |
+| PERF-002 | Running out of disk space | check_performance | ok — 84 GB free (20.2%) | ✅ |
+
+## Extended run_test Results
+
+| test_type | result | notes |
+|---|---|---|
+| wifi_test | pass | status=ok |
+| vpn_test | unknown | status=warning (disconnected adapter) — correct |
+| bluetooth_audio_test | pass | status=ok |
+| display_test | pass | status=ok |
+| performance_test | unknown | status=warning (memory 94.2%) — correct |
+| browser_test | pass | status=ok |
+
+## Diagnostics returning unknown/warning (truthful)
+
+- **check_vpn**: returns `warning` when VPN adapter present but disconnected. Does NOT claim authentication state.
+- **check_performance**: returns `warning` when memory ≥ 80%. Does NOT claim a root cause.
+- **check_display** monitor resolutions: returns `unknown` for monitors where WMI cannot read resolution — truthful.
+- **check_dock**: returns `dock_model: unknown` when no named dock recognised — truthful.
+- **check_application_state** version: returns `unknown` when exe path not found via `where` — truthful.
+
+## New incident schema — likely_area values confirmed working
+microphone | camera | speaker | connectivity | wifi | vpn | bluetooth_audio | display | dock | browser | application | performance

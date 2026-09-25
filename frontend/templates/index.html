@@ -1,53 +1,626 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AI IT Incident Triage Agent</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI IT Incident Triage Agent</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <main class="dashboard">
-        <header class="topbar">
-            <div class="wordmark"><span class="wordmark-mark">T</span><div><p>AI IT INCIDENT TRIAGE</p><span>Evidence-led support desk</span></div></div>
-            <div class="role-controls hidden" id="roleControls"><span id="roleLabel">Prototype role</span><button id="switchRole" type="button">Switch Role</button></div>
-            <div class="connection"><i></i> Connected</div>
-        </header>
-        <p class="environment-note">Live diagnostic values are supplied by the support backend. Unknown means the host could not expose that signal.</p>
-        <section id="welcomeView" class="welcome-view" aria-labelledby="welcome-title">
-            <span class="eyebrow">AI IT SUPPORT</span>
-            <h1 id="welcome-title">Welcome back</h1>
-            <p>Choose the support workspace for this prototype session.</p>
-            <div class="role-options">
-                <button class="role-button" data-role="employee" type="button"><span>Continue as Employee</span><small>Voice troubleshooting and guided diagnostics</small><strong>&rarr;</strong></button>
-                <button class="role-button" data-role="technician" type="button"><span>Continue as Technician</span><small>Review incidents and diagnostic handoffs</small><strong>&rarr;</strong></button>
+
+<main class="dashboard">
+
+  <!-- ── Top bar ──────────────────────────────────────────── -->
+  <header class="topbar" role="banner">
+
+    <!-- Left: logo + wordmark -->
+    <div class="wordmark">
+      <img
+        class="wordmark-logo"
+        src="{{ url_for('static', filename='meeting-support-logo.svg') }}"
+        alt="AI IT Triage logo"
+        aria-hidden="true"
+      >
+      <div class="wordmark-text">
+        <p>AI IT INCIDENT TRIAGE</p>
+        <span>Evidence-led support desk</span>
+      </div>
+    </div>
+
+    <!-- Centre: nav pills (visible once a role is chosen) -->
+    <nav class="topbar-nav hidden" id="topbarNav" aria-label="Workspace navigation">
+      <button class="topbar-nav-pill active" data-role="employee" type="button">
+        Employee
+      </button>
+      <button class="topbar-nav-pill" data-role="technician" type="button">
+        Technician
+      </button>
+    </nav>
+
+    <!-- Right: role badge + connection + switch -->
+    <div class="topbar-right">
+      <div class="role-controls hidden" id="roleControls" aria-label="Current role">
+        <span class="role-badge" id="roleLabel">Prototype role</span>
+        <button id="switchRole" type="button">Switch Role</button>
+      </div>
+      <div class="connection" aria-label="Service status">
+        <span class="connection-dot" aria-hidden="true"></span>
+        Connected
+      </div>
+    </div>
+
+  </header>
+
+  <p class="environment-note" role="note">
+    Live diagnostic values are supplied by the support backend.
+    <em>Unknown</em> means the host could not expose that signal.
+  </p>
+
+
+  <!-- ── Welcome / role selection ──────────────────────────── -->
+  <section
+    id="welcomeView"
+    class="welcome-view"
+    aria-labelledby="welcome-title"
+  >
+    <span class="eyebrow">AI IT SUPPORT</span>
+    <h1 id="welcome-title">Welcome back</h1>
+    <p>Choose the support workspace for this prototype session.</p>
+
+    <div class="role-options" role="list">
+      <button
+        class="role-button"
+        data-role="employee"
+        type="button"
+        role="listitem"
+      >
+        <span>Continue as Employee</span>
+        <small>Voice troubleshooting and guided diagnostics</small>
+        <strong aria-hidden="true">&rarr;</strong>
+      </button>
+      <button
+        class="role-button"
+        data-role="technician"
+        type="button"
+        role="listitem"
+      >
+        <span>Continue as Technician</span>
+        <small>Review incidents and diagnostic handoffs</small>
+        <strong aria-hidden="true">&rarr;</strong>
+      </button>
+    </div>
+
+    <small class="prototype-note">
+      Prototype role selection only. This is not authentication.
+    </small>
+  </section>
+
+
+  <!-- ── Employee workspace ─────────────────────────────────── -->
+  <section
+    id="employeeView"
+    class="hidden"
+    aria-label="Employee support workspace"
+  >
+
+    <div class="workspace-layout">
+
+      <!-- LEFT: Conversation + persistent composer ─────────── -->
+      <div class="conversation-col">
+
+        <!-- Conversation header -->
+        <div class="conv-header">
+          <span class="eyebrow">LIVE CONVERSATION</span>
+          <span class="live-badge" aria-live="polite" aria-label="Session live">
+            <span class="live-badge-dot" aria-hidden="true"></span>
+            LIVE
+          </span>
+        </div>
+
+        <!-- ── Voice orb — shown in top half of left column ── -->
+        <!--
+          Visible in IDLE and LISTENING states.
+          The orb glows when idle; the waveform animates when listening.
+          JS adds/removes body[data-voice] to drive the CSS states.
+        -->
+        <div class="voice-orb-area" id="voiceOrbArea" aria-hidden="true">
+          <p class="voice-orb-heading">What can I do for you today?</p>
+
+          <!-- Orb: glowing sphere -->
+          <div class="voice-orb-wrap">
+            <div class="voice-orb" id="voiceOrb"></div>
+          </div>
+
+          <!-- Waveform bars — animate when listening -->
+          <div class="voice-waveform" id="voiceWaveform" aria-hidden="true">
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+            <span class="vw-bar"></span>
+          </div>
+
+          <!-- Live transcript preview (mirrors #liveTranscriptInline) -->
+          <p class="voice-orb-live" id="voiceOrbLive" aria-live="polite"></p>
+        </div>
+
+        <!-- Transcript — messages are appended here by JS -->
+        <div
+          id="transcript"
+          class="transcript"
+          role="log"
+          aria-live="polite"
+          aria-label="Conversation transcript"
+        >
+          <div class="transcript-empty">
+            Your conversation will appear here.<br>
+            Tell us what's happening and we'll get to work.
+          </div>
+        </div>
+
+        <!-- ── Persistent composer — NEVER hidden ─────────── -->
+        <!--
+          Three sub-states swap inside this fixed container.
+          All three divs exist in the DOM. Only the active one
+          is shown via JS; the container itself is never hidden.
+        -->
+        <div
+          class="composer"
+          id="composer"
+          role="group"
+          aria-label="Message composer"
+        >
+
+          <!-- IDLE state: text input + mic + send — always visible -->
+          <div class="composer-idle" id="composerIdle">
+            <input
+              id="messageInput"
+              type="text"
+              placeholder="Describe what's happening…"
+              aria-label="Type your issue"
+              autocomplete="off"
+              spellcheck="true"
+            >
+            <button
+              id="micBtn"
+              class="composer-mic"
+              type="button"
+              aria-label="Start voice input"
+              aria-pressed="false"
+              title="Voice input"
+            >
+              <!-- Microphone icon -->
+              <svg
+                width="18" height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8"  y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+            <button
+              id="send"
+              class="composer-send"
+              type="button"
+              aria-label="Send message"
+            >
+              <!-- Send icon -->
+              <svg
+                width="16" height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <line x1="22" y1="2"  x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+          <!-- /composerIdle -->
+
+          <!-- LISTENING panel — opens BELOW the idle bar when recording.
+               Hidden by default. JS adds/removes .hidden to show/hide.
+               The idle bar above stays visible throughout. -->
+          <div
+            class="composer-listening hidden"
+            id="composerListening"
+            role="status"
+            aria-live="polite"
+            aria-label="Voice recording active"
+          >
+            <!-- Top bar: red dot + LISTENING label -->
+            <div class="cl-topbar">
+              <span class="cl-rec-dot" aria-hidden="true"></span>
+              <span class="cl-rec-label" id="listeningLabel">Listening</span>
             </div>
-            <small class="prototype-note">Prototype role selection only. This is not authentication.</small>
-        </section>
-        <section id="employeeView">
-        <section class="hero" aria-labelledby="hero-title">
-            <div class="hero-copy"><span class="eyebrow">REAL-TIME ASSISTANCE</span><h1 id="hero-title">Let&apos;s get your meeting back on track.</h1><p id="voiceStatus">Tap the microphone and describe what went wrong.</p></div>
-            <button id="mic" class="talk-button" type="button" aria-label="Talk to support"><span class="mic-icon">&#127908;</span><span>TALK TO SUPPORT</span><span class="talk-hint">Voice input</span></button>
-        </section>
-        <section class="transcript-panel" aria-labelledby="transcript-title">
-            <div class="section-heading"><div><span class="eyebrow">LIVE TRANSCRIPT</span><h2 id="transcript-title">What we heard</h2></div><span class="live-badge"><i></i> LIVE</span></div>
-            <div class="transcript" id="transcript" aria-live="polite"><div class="empty-transcript">Your conversation will appear here after you speak.</div></div>
-            <div class="text-fallback" id="fallback"><input id="message" type="text" placeholder="Or type your meeting issue..." aria-label="Type your meeting issue"><button id="send" type="button">Send</button></div>
-        </section>
-        <section class="dashboard-grid">
-            <article class="panel issue-panel"><span class="eyebrow">CURRENT ISSUE</span><div class="issue-icon">!</div><h2 id="title">Waiting for your issue</h2><p id="subtitle">Tell us what is happening in your meeting and we&apos;ll check it.</p><span class="issue-status" id="severity">READY</span></article>
-            <article class="panel diagnosis-panel"><div class="section-heading compact"><div><span class="eyebrow">DIAGNOSIS TIMELINE</span><h2>System checks</h2></div><span class="progress" id="progress">0 / 0</span></div><div class="agent-status" id="agentStatus">Listening</div><div class="timeline" id="timeline"><div class="timeline-empty">Diagnostic checks will populate here.</div></div></article>
-            <article class="panel action-panel" id="approval"><span class="eyebrow">RECOMMENDED ACTION</span><h2 id="actionTitle">We&apos;ll recommend the next step here.</h2><p id="actionDescription">Run a diagnostic to receive a plain-language action.</p><button id="approve" class="approve-button" type="button" disabled>Approve &amp; Test <span>&rarr;</span></button><p id="verify" class="verify-status hidden">Running a verification check...</p></article>
-            <article class="panel verification-panel"><span class="eyebrow">VERIFICATION</span><h2 id="verificationTitle">Pending</h2><p id="verificationDetail">A result will appear after an approved action is tested.</p></article>
-            <article class="panel escalation-panel hidden" id="escalation"><span class="eyebrow">ISSUE ESCALATED</span><h2>IT support has the case</h2><p id="escalationSummary">The captured evidence has been routed to support.</p><dl><div><dt>Incident ID</dt><dd id="ticketId">-</dd></div><div><dt>Routing team</dt><dd id="routingTeam">-</dd></div><div><dt>Diagnostics</dt><dd id="diagnosticCount">0 checks</dd></div></dl></article>
-        </section>
-        </section>
-        <section id="technicianView" class="technician-view hidden">
-            <div class="technician-heading"><div><span class="eyebrow">TECHNICIAN WORKSPACE</span><h1>Incoming incidents, with the evidence intact.</h1></div><button id="refreshIncidents" class="refresh-button" type="button">Refresh list</button></div>
-            <div class="technician-grid"><section class="incident-list-panel"><div class="section-heading"><div><span class="eyebrow">OPEN CASES</span><h2>Incident queue</h2></div><span class="progress" id="incidentCount">0</span></div><div id="incidentList" class="incident-list"><p class="timeline-empty">Loading incidents...</p></div></section><section id="incidentDetail" class="incident-detail-panel"><p class="timeline-empty">Select an incident to inspect its diagnostic handoff.</p></section></div>
-        </section>
-        <footer><span>Actions are approval-gated and verified before resolution.</span><div class="footer-actions"><button id="new" type="button">Start new session</button><button id="footerSwitchRole" type="button">Switch Role</button></div></footer>
-    </main>
-    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+
+            <!-- Centre: mic icon + animated waveform -->
+            <div class="cl-waveform-row" aria-hidden="true">
+              <svg class="cl-mic-icon"
+                width="20" height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8"  y1="23" x2="16" y2="23"/>
+              </svg>
+              <div class="listening-pulse">
+                <span class="pulse-bar"></span>
+                <span class="pulse-bar"></span>
+                <span class="pulse-bar"></span>
+                <span class="pulse-bar"></span>
+                <span class="pulse-bar"></span>
+                <span class="pulse-bar"></span>
+                <span class="pulse-bar"></span>
+                <span class="pulse-bar"></span>
+                <span class="pulse-bar"></span>
+              </div>
+            </div>
+
+            <!-- Live transcript preview -->
+            <p
+              class="cl-live-transcript"
+              id="liveTranscriptInline"
+              aria-live="polite"
+              aria-label="Live transcription"
+            ></p>
+
+            <!-- Stop button -->
+            <button
+              id="stopListening"
+              class="cl-stop-btn"
+              type="button"
+              aria-label="Stop recording"
+            >
+              <svg
+                width="10" height="10"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+              </svg>
+              Stop
+            </button>
+          </div>
+          <!-- /composerListening -->
+
+          <!-- PROCESSING state: spinner + label — replaces idle bar -->
+          <div
+            class="composer-processing hidden"
+            id="composerProcessing"
+            role="status"
+            aria-live="polite"
+            aria-label="Processing voice input"
+          >
+            <div class="spinner" aria-hidden="true"></div>
+            <span id="processingLabel">Processing…</span>
+          </div>
+          <!-- /composerProcessing -->
+
+        </div>
+        <!-- /composer -->
+
+      </div>
+      <!-- /conversation-col -->
+
+
+      <!-- RIGHT: Live diagnosis workspace ──────────────────── -->
+      <div class="diagnosis-col" id="diagnosisCol" aria-label="Live diagnosis workspace">
+
+        <!--
+          Unified workspace panel.
+          All sections live inside one card. JS shows/hides individual
+          sections as the session progresses — nothing is hardcoded.
+        -->
+        <article class="dcard ws-panel" id="wsPanel" aria-label="Diagnosis workspace">
+
+          <!-- ── HEADER: issue title + status pill ─────────── -->
+          <div class="ws-header">
+            <div class="ws-header-left">
+              <span class="eyebrow">CURRENT INCIDENT</span>
+              <h2 id="issueName">Waiting for your issue</h2>
+            </div>
+            <span
+              class="status-pill"
+              id="statusPill"
+              data-status="ready"
+              aria-label="Session status"
+            >READY</span>
+          </div>
+
+          <!-- Symptom / finding line — shown once issue is understood -->
+          <p id="issueSymptom" class="ws-symptom hidden"></p>
+
+          <!-- ── SECTION: DIAGNOSIS ─────────────────────────── -->
+          <div class="ws-section hidden" id="diagSection">
+            <span class="ws-section-label">DIAGNOSIS</span>
+
+            <!-- Activity bar — shown ONLY while a real tool is running -->
+            <div
+              class="diag-status-bar hidden"
+              id="diagStatusBar"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <div class="spinner-small" aria-hidden="true"></div>
+              <span id="diagStatusLabel"></span>
+            </div>
+
+            <!--
+              Tool result blocks injected here by renderDiagnosisResults().
+              Each tool (check_display, check_dock, etc.) gets its own
+              .diag-result-block when its result arrives.
+              Empty until the first result.
+            -->
+            <div id="diagResultsContainer" aria-label="Diagnostic results"></div>
+          </div>
+
+          <!-- ── SECTION: FINDING ───────────────────────────── -->
+          <!--
+            Shown only when the backend provides a finding.
+            Hides if finding is cleared.
+          -->
+          <div class="ws-section hidden" id="findingSection">
+            <span class="ws-section-label">FINDING</span>
+            <p id="findingText" class="ws-finding-text"></p>
+          </div>
+
+          <!-- ── SECTION: TIMELINE ──────────────────────────── -->
+          <div class="ws-section hidden" id="timelineSection">
+            <div class="ws-section-row">
+              <span class="ws-section-label" id="timelineHeading">TIMELINE</span>
+              <span
+                class="progress-pill"
+                id="progressPill"
+                aria-label="Diagnostic progress"
+              >–</span>
+            </div>
+            <div class="timeline" id="timeline" aria-label="Diagnostic steps">
+              <div class="timeline-empty">Steps will appear here.</div>
+            </div>
+          </div>
+
+          <!-- ── SECTION: TROUBLESHOOTING ───────────────────── -->
+          <!--
+            Transient — shown only while RAG is processing.
+            JS removes it and shows the finding instead once complete.
+          -->
+          <div class="ws-section hidden" id="troubleshootingSection">
+            <span class="ws-section-label">TROUBLESHOOTING</span>
+            <div class="ws-rag-state" id="ragState">
+              <div class="spinner-small" aria-hidden="true"></div>
+              <span id="ragStateLabel">Reviewing guidance…</span>
+            </div>
+          </div>
+
+          <!-- ── SECTION: NEXT STEP ─────────────────────────── -->
+          <!--
+            Shown when the agent has a concrete next step recommendation
+            but no executable tool action (manual user step).
+          -->
+          <div class="ws-section hidden" id="nextStepSection">
+            <span class="ws-section-label">NEXT STEP</span>
+            <p id="nextStepText" class="ws-next-step-text"></p>
+          </div>
+
+          <!-- ── SECTION: ACTION ────────────────────────────── -->
+          <div class="ws-section hidden" id="actionSection">
+            <span class="ws-section-label">ACTION</span>
+            <p id="actionTitle" class="ws-action-title"></p>
+            <p id="actionDescription" class="ws-action-desc"></p>
+
+            <!--
+              Approve & Test — shown when stage === approval_required
+              AND a real executable action exists.
+            -->
+            <button
+              id="approve"
+              class="approve-btn hidden"
+              type="button"
+              aria-label="Approve and test the recommended action"
+            >
+              Approve &amp; Test
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12 5 19 12 12 19"/>
+              </svg>
+            </button>
+
+            <!--
+              "I've done this" — shown when stage === approval_required
+              but no executable tool action exists (manual guidance only).
+            -->
+            <button
+              id="manualDone"
+              class="manual-done-btn hidden"
+              type="button"
+              aria-label="Confirm the manual step was completed"
+            >
+              I've done this
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- ── SECTION: VERIFICATION ──────────────────────── -->
+          <div class="ws-section hidden" id="verificationSection">
+            <span class="ws-section-label">VERIFICATION</span>
+
+            <!-- Running state — spinner + label -->
+            <div class="ws-verifying hidden" id="verifyingState">
+              <div class="spinner-small" aria-hidden="true"></div>
+              <span>Verifying display setup…</span>
+            </div>
+
+            <!-- Result -->
+            <h3
+              id="verificationTitle"
+              class="ws-verification-title"
+              data-vstate="pending"
+            >Pending</h3>
+            <p id="verificationDetail" class="ws-verification-detail"></p>
+          </div>
+
+          <!-- ── SECTION: ESCALATION ────────────────────────── -->
+          <!--
+            Hidden until escalation_card arrives from backend.
+          -->
+          <div class="ws-section hidden" id="escalationSection">
+            <span class="ws-section-label">INCIDENT</span>
+
+            <!-- Creating state — transient -->
+            <div class="ws-creating hidden" id="creatingIncidentState">
+              <div class="spinner-small" aria-hidden="true"></div>
+              <span>Creating incident…</span>
+            </div>
+
+            <!-- Incident card — shown after ticket_id is received -->
+            <div class="ws-incident-card hidden" id="incidentCreatedCard">
+              <div class="ws-incident-id-row">
+                <span class="ws-incident-id" id="ticketId">–</span>
+                <span class="ws-incident-team" id="routingTeam">–</span>
+              </div>
+
+              <div class="ws-incident-meta hidden" id="escalationMeta">
+                <span id="diagnosticCount">0 checks</span>
+              </div>
+
+              <p id="escalationSummary" class="ws-escalation-summary"></p>
+
+              <!-- Technician handoff sections — injected by JS -->
+              <div id="escalationHandoff" class="ws-handoff hidden"></div>
+
+              <a
+                id="viewIncidentBtn"
+                class="view-incident-btn hidden"
+                href="#"
+                role="button"
+                aria-label="View full incident details"
+              >
+                View Incident
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                  <polyline points="12 5 19 12 12 19"/>
+                </svg>
+              </a>
+            </div>
+          </div>
+
+        </article>
+        <!-- /ws-panel -->
+
+      </div>
+      <!-- /diagnosis-col -->
+
+    </div>
+    <!-- /workspace-layout -->
+
+  </section>
+  <!-- /employeeView -->
+
+
+  <!-- ── Technician workspace ───────────────────────────────── -->
+  <section
+    id="technicianView"
+    class="technician-view hidden"
+    aria-label="Technician workspace"
+  >
+    <div class="technician-heading">
+      <div>
+        <span class="eyebrow">TECHNICIAN WORKSPACE</span>
+        <h1>Incoming incidents, with the evidence intact.</h1>
+      </div>
+      <button id="refreshIncidents" class="refresh-button" type="button">
+        Refresh list
+      </button>
+    </div>
+
+    <div class="technician-grid">
+      <section aria-labelledby="queueHeading">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">OPEN CASES</span>
+            <h2 id="queueHeading">Incident queue</h2>
+          </div>
+          <span
+            class="progress-pill"
+            id="incidentCount"
+            aria-label="Open incident count"
+          >0</span>
+        </div>
+        <div id="incidentList" class="incident-list" role="list">
+          <p class="timeline-empty">Loading incidents…</p>
+        </div>
+      </section>
+
+      <section
+        id="incidentDetail"
+        class="incident-detail-panel"
+        aria-label="Incident detail"
+        aria-live="polite"
+      >
+        <p class="timeline-empty">
+          Select an incident to inspect its diagnostic handoff.
+        </p>
+      </section>
+    </div>
+  </section>
+  <!-- /technicianView -->
+
+
+  <!-- ── Footer ─────────────────────────────────────────────── -->
+  <footer role="contentinfo">
+    <span>Actions are approval-gated and verified before resolution.</span>
+    <div class="footer-actions">
+      <button id="newSession" type="button">Start new session</button>
+      <button id="footerSwitchRole" type="button">Switch Role</button>
+    </div>
+  </footer>
+
+</main>
+
+<script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </body>
 </html>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768 512" role="img" aria-labelledby="title desc">
+  <title id="title">Meeting support logo</title>
+  <desc id="desc">A turquoise audio waveform flowing into a navy support document.</desc>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="#0bc5d1" stroke-width="14" d="M118 256h38m0-14v28m28-54v80m28-125v184m28-158v106m28-180v270m28-204v138m28-168v198m28-134v72"/>
+    <path stroke="#0bc5d1" stroke-width="13" d="M274 365c47 0 56-115 92-174 20-33 38-54 78-54"/>
+    <path stroke="#0bc5d1" stroke-width="13" d="M274 389c62 0 78-147 118-207 20-30 40-45 76-45"/>
+    <path stroke="#1c3966" stroke-width="13" d="M314 389c38-11 49-106 83-168 18-34 40-50 80-50h169v218H314z"/>
+    <path stroke="#1c3966" stroke-width="13" d="M604 171v61c-25 0-40 17-40 39s15 39 40 39v79"/>
+    <path stroke="#0bc5d1" stroke-width="13" d="M399 256h203"/>
+    <path stroke="#1c3966" stroke-width="13" d="M425 198h105m28 0h28M425 228h157M425 285h76m25 0h57M425 328h64m37 0h57"/>
+  </g>
+</svg>
